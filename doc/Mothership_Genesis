@@ -1,0 +1,1098 @@
+/**
+ * ======================================================================
+ * FILE: Mothership_Genesis.gs
+ * PROJECT: Ma Golide - MOTHERSHIP
+ * PURPOSE: One-click setup for Central Command structure
+ * AUTHOR: AI Council (GPT-5.1, The Architect)
+ * VERSION: 2.1 (Aligned with AccaEngine)
+ * USAGE: Run setupMothership() once when creating a new Mothership file
+ * ======================================================================
+ */
+
+/**
+ * WHY: To establish a standardized, repeatable structure for the central hub
+ * WHAT: Creates and formats all required Mothership sheets
+ * HOW: Uses SpreadsheetApp to create Config, Sync_Temp, Acca_Portfolio, Acca_Results, Master_Dashboard
+ * WHERE: This script runs ONLY inside the 'Ma Golide - MOTHERSHIP' Google Sheet
+ */
+function setupMothership() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  // Confirmation dialog
+  const confirm = ui.alert(
+    '🚀 Ma Golide Mothership Setup',
+    'This will create/reset the following sheets:\n\n' +
+    '• Config - Satellite registry\n' +
+    '• Sync_Temp - Bet staging area\n' +
+    '• Acca_Portfolio - Accumulator display\n' +
+    '• Acca_Results - Results tracker\n' +
+    '• Master_Dashboard - KPI overview\n\n' +
+    'Continue with setup?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) {
+    ss.toast('❌ Setup cancelled', 'Ma Golide', 3);
+    return;
+  }
+  
+  ss.toast('🚀 Constructing Central Command...', 'Ma Golide Mothership', 5);
+
+  try {
+    ss.toast('📋 Creating Config sheet...', 'Step 1/5', 3);
+    _createConfigSheet(ss);
+    
+    ss.toast('🔄 Creating Sync_Temp sheet...', 'Step 2/5', 3);
+    _createSyncTempSheet(ss);
+    
+    ss.toast('🎰 Creating Acca_Portfolio sheet...', 'Step 3/5', 3);
+    _createAccaPortfolioSheet(ss);
+    
+    ss.toast('📊 Creating Acca_Results sheet...', 'Step 4/5', 3);
+    _createAccaResultsSheet(ss);
+    
+    ss.toast('📈 Creating Master_Dashboard sheet...', 'Step 5/5', 3);
+    _createDashboardSheet(ss);
+    
+    _cleanupDefaultSheet(ss);
+
+    ss.toast('✅ Mothership Construction Complete!', 'Success', 5);
+    ui.alert(
+      '🎉 Mothership Ready!',
+      'Successfully created all sheets:\n\n' +
+      '✅ Config - Register your satellite leagues here\n' +
+      '✅ Sync_Temp - Staging area for synced bets\n' +
+      '✅ Acca_Portfolio - Your accumulator display\n' +
+      '✅ Acca_Results - Track wins/losses\n' +
+      '✅ Master_Dashboard - KPI overview\n\n' +
+      '📌 NEXT STEPS:\n' +
+      '1. Go to Config sheet\n' +
+      '2. Add your satellite spreadsheet URLs\n' +
+      '3. Run "Sync All Leagues" from the menu',
+      ui.ButtonSet.OK
+    );
+  } catch (e) {
+    Logger.log(`[Genesis] ERROR: ${e.message}\n${e.stack}`);
+    ui.alert('❌ Setup Error', `Failed to complete setup:\n\n${e.message}`, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * WHY: Config sheet stores all satellite league connections
+ * WHAT: Creates the registry for satellite spreadsheets
+ * HOW: Sets up headers and example row
+ */
+function _createConfigSheet(ss) {
+  let sheet = ss.getSheetByName('Config');
+  if (!sheet) {
+    sheet = ss.insertSheet('Config', 0);
+  }
+  sheet.clear();
+
+  // PHASE 1: add assayer_sheet_id column (H)
+  const headers = [[
+    'League ID', 'League Name', 'File URL', 'Sport Type', 'Status', 'Quarters', 'Last Sync',
+    'assayer_sheet_id'
+  ]];
+
+  sheet.getRange('A1:H1').setValues(headers)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  sheet.getRange('A2:H2').setValues([[
+    'NBA_2025',
+    'NBA',
+    'PASTE_SATELLITE_URL_HERE',
+    'Basketball',
+    'Active',
+    4,
+    '',
+    'PASTE_ASSAYER_SHEET_ID_HERE'
+  ]]);
+
+  sheet.getRange('A3:H3').setValues([[
+    'EURO_2025',
+    'Euroleague',
+    'PASTE_ANOTHER_URL_HERE',
+    'Basketball',
+    'Active',
+    4,
+    '',
+    'PASTE_ASSAYER_SHEET_ID_HERE'
+  ]]).setFontColor('#999999');
+
+  sheet.setColumnWidth(3, 400);
+  sheet.setColumnWidth(8, 320);
+  sheet.autoResizeColumns(1, 2);
+  sheet.autoResizeColumns(4, 7);
+
+  sheet.getRange('I1').setValue('📌 Instructions:')
+    .setFontWeight('bold')
+    .setFontSize(11);
+  sheet.getRange('I2').setValue('1. Replace URLs with your satellite spreadsheet URLs')
+    .setFontColor('#666666');
+  sheet.getRange('I3').setValue('2. Set Status to "Active" or "Inactive"')
+    .setFontColor('#666666');
+  sheet.getRange('I4').setValue('3. Run "Sync All Leagues" from the menu')
+    .setFontColor('#666666');
+  sheet.getRange('I5').setValue('4. Quarters = number of periods (4 for NBA, 2 for soccer)')
+    .setFontColor('#666666');
+  sheet.getRange('I6').setValue('5. Set assayer_sheet_id to enable Assayer edges + league purity routing')
+    .setFontColor('#666666');
+
+  Logger.log('[Genesis] Config sheet created (with assayer_sheet_id)');
+}
+
+/**
+ * WHY: Sync_Temp is the staging area for synced bets before portfolio building
+ * WHAT: Creates the canonical schema for bet data
+ * HOW: Sets up headers matching AccaEngine expectations
+ */
+function _createSyncTempSheet(ss) {
+  let sheet = ss.getSheetByName('Sync_Temp');
+  if (!sheet) {
+    sheet = ss.insertSheet('Sync_Temp', 1);
+  }
+  sheet.clear();
+  
+  const headers = [['League', 'Time', 'Match', 'Pick', 'Type', 'Odds', 'Confidence', 'EV']];
+  sheet.getRange('A1:H1').setValues(headers)
+    .setFontWeight('bold')
+    .setBackground('#ff9900')
+    .setFontColor('#ffffff');
+
+  sheet.getRange('A2').setValue('⏳ Run "Sync All Leagues" to populate this sheet');
+  sheet.getRange('A2:H2').merge().setFontColor('#999999').setFontStyle('italic');
+
+  sheet.autoResizeColumns(1, 8);
+
+  Logger.log('[Genesis] Sync_Temp sheet created');
+}
+
+/**
+ * WHY: Acca_Portfolio displays the built accumulators
+ * WHAT: Creates the display sheet for accumulator portfolios
+ * HOW: Sets up structure for AccaEngine output
+ */
+function _createAccaPortfolioSheet(ss) {
+  let sheet = ss.getSheetByName('Acca_Portfolio');
+  if (!sheet) {
+    sheet = ss.insertSheet('Acca_Portfolio', 2);
+  }
+  sheet.clear();
+  
+  sheet.getRange('A1:I1').merge()
+    .setValue('🎰 MA GOLIDE - ACCUMULATOR PORTFOLIO')
+    .setFontWeight('bold')
+    .setFontSize(14)
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  sheet.getRange('A3').setValue('⏳ Run "Build Portfolio" after syncing leagues');
+  sheet.getRange('A3:I3').merge().setFontColor('#999999').setFontStyle('italic');
+
+  Logger.log('[Genesis] Acca_Portfolio sheet created');
+}
+
+/**
+ * WHY: Acca_Results tracks accumulator outcomes
+ * WHAT: Creates the results tracking sheet
+ * HOW: Sets up headers for result monitoring
+ */
+function _createAccaResultsSheet(ss) {
+  let sheet = ss.getSheetByName('Acca_Results');
+  if (!sheet) {
+    sheet = ss.insertSheet('Acca_Results', 3);
+  }
+  sheet.clear();
+  
+  const headers = [[
+    'Acca ID', 'Type', 'Legs', 'Total Odds', 'Avg Conf%',
+    'Created', 'Window Start', 'Window End',
+    'Status', 'Legs Won', 'Legs Lost', 'Legs Pending', 'Result'
+  ]];
+  sheet.getRange('A1:M1').setValues(headers)
+    .setFontWeight('bold')
+    .setBackground('#38761d')
+    .setFontColor('#ffffff');
+
+  sheet.getRange('A2').setValue('⏳ Results will appear here after building and checking accumulators');
+  sheet.getRange('A2:M2').merge().setFontColor('#999999').setFontStyle('italic');
+
+  sheet.autoResizeColumns(1, 13);
+
+  Logger.log('[Genesis] Acca_Results sheet created');
+}
+
+/**
+ * WHY: Master_Dashboard provides KPI overview
+ * WHAT: Creates the dashboard for performance metrics
+ * HOW: Sets up structure for HiveMind updates
+ */
+function _createDashboardSheet(ss) {
+  let sheet = ss.getSheetByName('Master_Dashboard');
+  if (!sheet) {
+    sheet = ss.insertSheet('Master_Dashboard', 4);
+  }
+  sheet.clear();
+  
+  sheet.getRange('A1:D1').merge()
+    .setValue('🏀 MA GOLIDE - HIVE MIND DASHBOARD')
+    .setFontWeight('bold')
+    .setFontSize(14)
+    .setBackground('#674ea7')
+    .setFontColor('#ffffff');
+
+  const kpiData = [
+    ['', ''],
+    ['📊 SYNC STATUS', ''],
+    ['Total Leagues:', '0'],
+    ['Active Leagues:', '0'],
+    ['Last Sync:', 'Never'],
+    ['', ''],
+    ['📈 BET STATISTICS', ''],
+    ['Total Bets Synced:', '0'],
+    ['Bankers:', '0'],
+    ['Snipers:', '0'],
+    ['', ''],
+    ['🎰 ACCUMULATOR STATS', ''],
+    ['Total Accas Built:', '0'],
+    ['Accas Won:', '0'],
+    ['Accas Lost:', '0'],
+    ['Accas Pending:', '0'],
+    ['Win Rate:', 'N/A'],
+    ['', ''],
+    ['💰 PERFORMANCE', ''],
+    ['Best Acca Type:', 'N/A'],
+    ['Total ROI:', 'N/A']
+  ];
+
+  sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
+
+  [3, 8, 13, 20].forEach(row => {
+    sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8e8e8');
+  });
+
+  sheet.setColumnWidth(1, 180);
+  sheet.setColumnWidth(2, 120);
+
+  Logger.log('[Genesis] Master_Dashboard sheet created');
+}
+
+/**
+ * WHY: Clean up default Sheet1
+ * WHAT: Removes the auto-created Sheet1
+ * HOW: Tries to delete, ignores if doesn't exist
+ */
+function _cleanupDefaultSheet(ss) {
+  try {
+    const defaultSheet = ss.getSheetByName('Sheet1');
+    if (defaultSheet) {
+      ss.deleteSheet(defaultSheet);
+      Logger.log('[Genesis] Removed default Sheet1');
+    }
+  } catch (e) {
+    // Ignore - sheet might not exist or can't be deleted
+  }
+}
+
+
+
+/**
+ * Analyze SNIPER DIR performance specifically
+ * Shows win rate and ROI for directional O/U picks
+ */
+function analyzeSniperDirPerformance() {
+  const FUNC_NAME = 'analyzeSniperDirPerformance';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  
+  Logger.log(`[${FUNC_NAME}] ╔══════════════════════════════════════════════════════════════╗`);
+  Logger.log(`[${FUNC_NAME}] ║              SNIPER DIR PERFORMANCE ANALYSIS                 ║`);
+  Logger.log(`[${FUNC_NAME}] ╚══════════════════════════════════════════════════════════════╝`);
+  
+  ss.toast('🎯 Analyzing SNIPER DIR performance...', 'Analysis', 10);
+  
+  try {
+    const perfSheet = ss.getSheetByName('Bet_Performance');
+    if (!perfSheet) {
+      throw new Error('Bet_Performance sheet not found. Run "Analyze Bet Performance" first.');
+    }
+    
+    const data = perfSheet.getDataRange().getValues();
+    
+    // Find data rows
+    let dataStartRow = 0;
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === 'League') {
+        dataStartRow = i + 1;
+        break;
+      }
+    }
+    
+    if (dataStartRow === 0) {
+      throw new Error('Could not find data section in Bet_Performance');
+    }
+    
+    // Collect SNIPER DIR stats
+    const dirStats = {
+      total: 0, won: 0, lost: 0, pending: 0,
+      byQuarter: { q1: { won: 0, lost: 0 }, q2: { won: 0, lost: 0 }, q3: { won: 0, lost: 0 }, q4: { won: 0, lost: 0 } },
+      byDirection: { over: { won: 0, lost: 0 }, under: { won: 0, lost: 0 } },
+      byLeague: {}
+    };
+    
+    for (let i = dataStartRow; i < data.length; i++) {
+      const row = data[i];
+      const league = String(row[0] || '').trim();
+      const pick = String(row[2] || '').toUpperCase();
+      const betType = String(row[3] || '').toUpperCase();
+      const grade = String(row[4] || '').toUpperCase();
+      
+      // Check if this is a SNIPER DIR bet
+      const isDirType = betType.includes('DIR');
+      const isDirPick = /Q[1-4]\s*(OVER|UNDER)\s*[\d.]+/i.test(pick);
+      
+      if (!isDirType && !isDirPick) continue;
+      
+      dirStats.total++;
+      
+      if (grade === 'WON') dirStats.won++;
+      else if (grade === 'LOST') dirStats.lost++;
+      else dirStats.pending++;
+      
+      // Extract quarter and direction
+      const match = pick.match(/Q([1-4])\s*(OVER|UNDER)/i);
+      if (match) {
+        const qKey = `q${match[1]}`;
+        const dir = match[2].toLowerCase();
+        
+        if (grade === 'WON') {
+          dirStats.byQuarter[qKey].won++;
+          dirStats.byDirection[dir].won++;
+        } else if (grade === 'LOST') {
+          dirStats.byQuarter[qKey].lost++;
+          dirStats.byDirection[dir].lost++;
+        }
+      }
+      
+      // By league
+      if (!dirStats.byLeague[league]) {
+        dirStats.byLeague[league] = { won: 0, lost: 0 };
+      }
+      if (grade === 'WON') dirStats.byLeague[league].won++;
+      else if (grade === 'LOST') dirStats.byLeague[league].lost++;
+    }
+    
+    // Calculate win rates
+    const graded = dirStats.won + dirStats.lost;
+    const overallRate = graded > 0 ? ((dirStats.won / graded) * 100).toFixed(1) : 'N/A';
+    
+    // Build report
+    let report = `🎯 SNIPER DIR PERFORMANCE REPORT\n\n`;
+    report += `Total DIR bets: ${dirStats.total}\n`;
+    report += `Graded: ${graded} (Won: ${dirStats.won}, Lost: ${dirStats.lost})\n`;
+    report += `Win Rate: ${overallRate}%\n`;
+    report += `Pending: ${dirStats.pending}\n\n`;
+    
+    report += `📊 BY QUARTER:\n`;
+    ['q1', 'q2', 'q3', 'q4'].forEach(q => {
+      const qData = dirStats.byQuarter[q];
+      const qGraded = qData.won + qData.lost;
+      const qRate = qGraded > 0 ? ((qData.won / qGraded) * 100).toFixed(1) : 'N/A';
+      report += `   ${q.toUpperCase()}: ${qData.won}W/${qData.lost}L (${qRate}%)\n`;
+    });
+    
+    report += `\n📊 BY DIRECTION:\n`;
+    ['over', 'under'].forEach(dir => {
+      const dData = dirStats.byDirection[dir];
+      const dGraded = dData.won + dData.lost;
+      const dRate = dGraded > 0 ? ((dData.won / dGraded) * 100).toFixed(1) : 'N/A';
+      report += `   ${dir.toUpperCase()}: ${dData.won}W/${dData.lost}L (${dRate}%)\n`;
+    });
+    
+    // Top/bottom leagues
+    const leagueRankings = Object.entries(dirStats.byLeague)
+      .map(([league, stats]) => {
+        const g = stats.won + stats.lost;
+        return { league, ...stats, graded: g, rate: g > 0 ? (stats.won / g) * 100 : null };
+      })
+      .filter(l => l.graded >= 3)
+      .sort((a, b) => (b.rate || 0) - (a.rate || 0));
+    
+    if (leagueRankings.length > 0) {
+      report += `\n🏆 TOP LEAGUES (3+ bets):\n`;
+      leagueRankings.slice(0, 3).forEach((l, i) => {
+        report += `   ${i + 1}. ${l.league}: ${l.rate?.toFixed(1)}% (${l.won}W/${l.lost}L)\n`;
+      });
+      
+      const poorLeagues = leagueRankings.filter(l => l.rate !== null && l.rate < 45);
+      if (poorLeagues.length > 0) {
+        report += `\n❌ NEEDS IMPROVEMENT:\n`;
+        poorLeagues.slice(0, 3).forEach(l => {
+          report += `   • ${l.league}: ${l.rate?.toFixed(1)}%\n`;
+        });
+      }
+    }
+    
+    Logger.log(`[${FUNC_NAME}] ✅ Analysis complete`);
+    Logger.log(report);
+    
+    if (ui) {
+      ui.alert('🎯 SNIPER DIR Performance', report, ui.ButtonSet.OK);
+    }
+    
+  } catch (e) {
+    Logger.log(`[${FUNC_NAME}] ❌ ERROR: ${e.message}`);
+    if (ui) ui.alert('❌ Error', e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Debug SNIPER DIR detection
+ * Logs all bets and their type detection results
+ */
+function debugSniperDirDetection() {
+  const FUNC_NAME = 'debugSniperDirDetection';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  Logger.log(`[${FUNC_NAME}] ╔══════════════════════════════════════════════════════════════╗`);
+  Logger.log(`[${FUNC_NAME}] ║              DEBUG: SNIPER DIR DETECTION                     ║`);
+  Logger.log(`[${FUNC_NAME}] ╚══════════════════════════════════════════════════════════════╝`);
+  
+  const syncSheet = ss.getSheetByName('Sync_Temp');
+  if (!syncSheet) {
+    Logger.log(`[${FUNC_NAME}] ❌ Sync_Temp not found`);
+    return;
+  }
+  
+  const bets = _loadBets(syncSheet);
+  
+  const dirBets = bets.filter(b => b.isSniperDir);
+  const marginBets = bets.filter(b => b.isSniperMargin);
+  const ouBets = bets.filter(b => b.isSniperOU);
+  
+  Logger.log(`[${FUNC_NAME}] ═══════════════════════════════════════════════════════`);
+  Logger.log(`[${FUNC_NAME}] DETECTION RESULTS:`);
+  Logger.log(`[${FUNC_NAME}]   Total bets: ${bets.length}`);
+  Logger.log(`[${FUNC_NAME}]   SNIPER DIR: ${dirBets.length}`);
+  Logger.log(`[${FUNC_NAME}]   SNIPER Margin: ${marginBets.length}`);
+  Logger.log(`[${FUNC_NAME}]   SNIPER O/U: ${ouBets.length}`);
+  Logger.log(`[${FUNC_NAME}] ═══════════════════════════════════════════════════════`);
+  
+  if (dirBets.length > 0) {
+    Logger.log(`[${FUNC_NAME}] SNIPER DIR SAMPLES:`);
+    dirBets.slice(0, 5).forEach((b, i) => {
+      Logger.log(`[${FUNC_NAME}]   ${i + 1}. Type: "${b.type}" | Pick: "${b.pick}" | Conf: ${(b.confidence * 100).toFixed(0)}%`);
+    });
+  }
+  
+  try {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert('🔍 SNIPER DIR Detection Debug',
+      `Total bets: ${bets.length}\n\n` +
+      `🎯 SNIPER DIR: ${dirBets.length}\n` +
+      `📊 SNIPER Margin: ${marginBets.length}\n` +
+      `📈 SNIPER O/U: ${ouBets.length}\n\n` +
+      `Check View → Logs for sample details.`,
+      ui.ButtonSet.OK);
+  } catch (e) {}
+}
+
+
+/**
+ * Debug result matching logic
+ */
+function debugResultMatching() {
+  const FUNC_NAME = 'debugResultMatching';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  
+  Logger.log(`[${FUNC_NAME}] ═══════════════════════════════════════`);
+  Logger.log(`[${FUNC_NAME}] DEBUGGING RESULT MATCHING`);
+  
+  const resultsMap = _loadResultsTempForGrading(ss);
+  const keyCount = Object.keys(resultsMap).length;
+  
+  let report = `RESULT MATCHING DEBUG\n\n`;
+  report += `Total lookup keys: ${keyCount}\n\n`;
+  
+  // Show sample keys
+  const sampleKeys = Object.keys(resultsMap).slice(0, 20);
+  report += `Sample keys:\n`;
+  sampleKeys.forEach(k => {
+    const r = resultsMap[k];
+    report += `  ${k} → ${r.isFinished ? 'FT' : 'PENDING'} ${r.homeScore}-${r.awayScore}\n`;
+  });
+  
+  // Check portfolio matches
+  const portfolioSheet = ss.getSheetByName('Acca_Portfolio');
+  if (portfolioSheet) {
+    const pData = portfolioSheet.getDataRange().getValues();
+    report += `\nPortfolio matches:\n`;
+    
+    let checked = 0;
+    for (let r = 0; r < pData.length && checked < 10; r++) {
+      const matchStr = String(pData[r][3] || '');
+      if (!matchStr.toLowerCase().includes(' vs ')) continue;
+      
+      const { home, away } = _parseMatchString(matchStr);
+      if (!home) continue;
+      
+      const keys = _generateAllMatchKeys(home, away);
+      let found = false;
+      let foundKey = '';
+      
+      for (const k of keys) {
+        if (resultsMap[k]) {
+          found = true;
+          foundKey = k;
+          break;
+        }
+      }
+      
+      report += `  ${matchStr}\n`;
+      report += `    Keys: ${keys.slice(0, 2).join(', ')}\n`;
+      report += `    Match: ${found ? `YES (${foundKey})` : 'NO'}\n`;
+      
+      if (found) {
+        const res = resultsMap[foundKey];
+        report += `    Result: ${res.isFinished ? 'Finished' : 'Pending'} ${res.homeScore}-${res.awayScore}\n`;
+      }
+      
+      checked++;
+    }
+  }
+  
+  Logger.log(report);
+  
+  if (ui) ui.alert('Debug Results', report.substring(0, 2000), ui.ButtonSet.OK);
+}
+
+/**
+ * Force update Acca_Results from graded portfolio
+ */
+function forceUpdateAccaResults() {
+  const FUNC_NAME = 'forceUpdateAccaResults';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  
+  ss.toast('🔄 Force updating Acca_Results...', 'Processing', 10);
+  
+  try {
+    // Load results
+    const resultsMap = _loadResultsTempForGrading(ss);
+    
+    if (Object.keys(resultsMap).length === 0) {
+      if (ui) ui.alert('❌ Error', 'No results in Results_Temp. Run "Sync All Results" first.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // Grade portfolio
+    const report = _gradePortfolioLegs(ss, resultsMap);
+    
+    // Sync to Acca_Results
+    const count = _syncAccaResultsFromPortfolio(ss);
+    
+    ss.toast(`✅ Updated ${count} accumulators`, 'Complete', 5);
+    
+    if (ui) ui.alert('✅ Update Complete', `${report}\n\nUpdated ${count} rows in Acca_Results.`, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    Logger.log(`[${FUNC_NAME}] ❌ Error: ${e.message}`);
+    if (ui) ui.alert('❌ Error', e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Debug accuracy metrics fetching
+ */
+function debugAccuracyMetrics() {
+  const FUNC_NAME = 'debugAccuracyMetrics';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  
+  Logger.log(`[${FUNC_NAME}] ═══════════════════════════════════════`);
+  Logger.log(`[${FUNC_NAME}] DEBUGGING ACCURACY METRICS`);
+  Logger.log(`[${FUNC_NAME}] ═══════════════════════════════════════`);
+  
+  const metrics = fetchLeagueAccuracyMetrics();
+  
+  let report = 'ACCURACY METRICS DEBUG\n\n';
+  
+  for (const [league, data] of Object.entries(metrics)) {
+    report += `${league}:\n`;
+    report += `  BANKER: ${data.bankerAccuracy.toFixed(1)}% (Tier1: ${data.hasTier1 ? 'Yes' : 'No'})\n`;
+    report += `  SNIPER: ${data.sniperAccuracy.toFixed(1)}% (Tier2: ${data.hasTier2 ? 'Yes' : 'No'})\n`;
+    if (data.tier1Source) report += `  Source1: ${data.tier1Source}\n`;
+    if (data.tier2Source) report += `  Source2: ${data.tier2Source}\n`;
+    report += '\n';
+  }
+  
+  Logger.log(report);
+  
+  if (ui) ui.alert('Debug Results', report.substring(0, 2000), ui.ButtonSet.OK);
+}
+
+/**
+ * WHY: Wipe Bet_Performance when changing strategies
+ * WHAT: Clears all data and recreates clean structure
+ * HOW: Confirmation dialog → Clear → Rebuild headers
+ */
+function resetBetPerformance() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    '🔄 Reset Bet Performance',
+    'This will PERMANENTLY DELETE all bet performance history.\n\n' +
+    '• All win/loss records will be erased\n' +
+    '• All graded bets will be removed\n' +
+    '• Statistics will reset to zero\n\n' +
+    'This cannot be undone. Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) {
+    ss.toast('❌ Reset cancelled', 'Bet Performance', 3);
+    return;
+  }
+  
+  try {
+    let sheet = ss.getSheetByName('Bet_Performance');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Bet_Performance');
+      Logger.log('[Reset] Created new Bet_Performance sheet');
+    }
+    
+    // Clear everything
+    sheet.clear();
+    sheet.clearFormats();
+    sheet.clearNotes();
+    
+    // Rebuild structure - Summary section
+    const summaryRows = [
+      ['BET PERFORMANCE REPORT', '', '', '', '', '', ''],
+      ['Generated: Awaiting first analysis', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', ''],
+      ['OVERALL', '', 'BANKERS', '', 'SNIPERS', '', ''],
+      ['Total Bets', 0, 'Total', 0, 'Total', 0, ''],
+      ['Won', 0, 'Won', 0, 'Won', 0, ''],
+      ['Lost', 0, 'Lost', 0, 'Lost', 0, ''],
+      ['Win Rate', 'N/A', 'Win Rate', 'N/A', 'Win Rate', 'N/A', ''],
+      ['', '', '', '', '', '', ''],
+      ['League', 'Match', 'Pick', 'Type', 'Grade', 'Score', 'Details']
+    ];
+    
+    sheet.getRange(1, 1, summaryRows.length, 7).setValues(summaryRows);
+    
+    // Apply formatting
+    // Title
+    sheet.getRange(1, 1, 1, 7)
+      .merge()
+      .setFontWeight('bold')
+      .setFontSize(16)
+      .setBackground('#2d3436')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center');
+    sheet.setRowHeight(1, 40);
+    
+    // Generated row
+    sheet.getRange(2, 1, 1, 7)
+      .merge()
+      .setFontStyle('italic')
+      .setFontColor('#636e72')
+      .setHorizontalAlignment('center');
+    
+    // Section headers
+    sheet.getRange(4, 1).setFontWeight('bold').setBackground('#dfe6e9');
+    sheet.getRange(4, 3).setFontWeight('bold').setBackground('#d4edda');
+    sheet.getRange(4, 5).setFontWeight('bold').setBackground('#fff3cd');
+    
+    // Data header
+    sheet.getRange(10, 1, 1, 7)
+      .setFontWeight('bold')
+      .setBackground('#74b9ff')
+      .setFontColor('#2d3436')
+      .setHorizontalAlignment('center');
+    
+    // Column widths
+    sheet.setColumnWidth(1, 80);
+    sheet.setColumnWidth(2, 280);
+    sheet.setColumnWidth(3, 160);
+    sheet.setColumnWidth(4, 100);
+    sheet.setColumnWidth(5, 90);
+    sheet.setColumnWidth(6, 80);
+    sheet.setColumnWidth(7, 180);
+    
+    sheet.setFrozenRows(10);
+    
+    // Add instructions in row 11
+    sheet.getRange(11, 1).setValue('⏳ Run "Analyze Bet Performance" to populate this sheet');
+    sheet.getRange(11, 1, 1, 7).merge().setFontStyle('italic').setFontColor('#999999');
+    
+    ss.toast('✅ Bet Performance reset complete - fresh start ready!', 'Success', 5);
+    Logger.log('[Reset] Bet_Performance sheet reset successfully');
+    
+  } catch (e) {
+    Logger.log(`[Reset] ERROR: ${e.message}\n${e.stack}`);
+    ui.alert('❌ Reset Error', `Failed to reset:\n\n${e.message}`, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * WHY: Reset Master_Dashboard when starting fresh
+ * WHAT: Clears all KPI values back to zero/initial state
+ * HOW: Preserves structure, resets values
+ */
+function resetMasterDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    '🔄 Reset Master Dashboard',
+    'This will reset all dashboard metrics to zero.\n\n' +
+    '• Sync counts → 0\n' +
+    '• Bet statistics → 0\n' +
+    '• Acca results → 0\n' +
+    '• Win rates → N/A\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) {
+    ss.toast('❌ Reset cancelled', 'Master Dashboard', 3);
+    return;
+  }
+  
+  try {
+    let sheet = ss.getSheetByName('Master_Dashboard');
+    
+    if (!sheet) {
+      // Recreate from scratch
+      sheet = ss.insertSheet('Master_Dashboard');
+    }
+    
+    sheet.clear();
+    
+    // Rebuild entire dashboard structure
+    sheet.getRange('A1:D1').merge()
+      .setValue('🏀 MA GOLIDE - HIVE MIND DASHBOARD')
+      .setFontWeight('bold')
+      .setFontSize(14)
+      .setBackground('#674ea7')
+      .setFontColor('#ffffff');
+    
+    const kpiData = [
+      ['', ''],
+      ['📊 SYNC STATUS', ''],
+      ['Total Leagues:', 0],
+      ['Active Leagues:', 0],
+      ['Last Sync:', 'Never'],
+      ['', ''],
+      ['📈 BET STATISTICS', ''],
+      ['Total Bets Synced:', 0],
+      ['Bankers:', 0],
+      ['Snipers:', 0],
+      ['Total Games:', 0],
+      ['Finished Games:', 0],
+      ['', ''],
+      ['🎰 ACCUMULATOR STATS', ''],
+      ['Total Accas Built:', 0],
+      ['Accas Won:', 0],
+      ['Accas Lost:', 0],
+      ['Accas Pending:', 0],
+      ['Win Rate:', 'N/A'],
+      ['', ''],
+      ['💰 PERFORMANCE', ''],
+      ['Overall Win Rate:', 'N/A'],
+      ['Banker Win Rate:', 'N/A'],
+      ['Sniper Win Rate:', 'N/A'],
+      ['ROI:', 'N/A']
+    ];
+    
+    sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
+    
+    // Format section headers
+    const sectionRows = [3, 8, 14, 21];
+    sectionRows.forEach(row => {
+      sheet.getRange(row, 1, 1, 2)
+        .setFontWeight('bold')
+        .setBackground('#e8e8e8');
+    });
+    
+    // Set column widths
+    sheet.setColumnWidth(1, 180);
+    sheet.setColumnWidth(2, 120);
+    
+    ss.toast('✅ Dashboard reset complete!', 'Success', 5);
+    Logger.log('[Reset] Master_Dashboard reset successfully');
+    
+  } catch (e) {
+    Logger.log(`[Reset] ERROR: ${e.message}\n${e.stack}`);
+    ui.alert('❌ Reset Error', `Failed to reset:\n\n${e.message}`, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * WHY: Nuclear option - reset EVERYTHING for a completely fresh start
+ * WHAT: Resets all output sheets while preserving Config
+ */
+function resetAllOutputSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    '⚠️ FULL RESET - All Output Sheets',
+    'This will reset:\n\n' +
+    '• Sync_Temp (synced bets)\n' +
+    '• Results_Temp (synced results)\n' +
+    '• Acca_Portfolio (accumulators)\n' +
+    '• Acca_Results (acca tracking)\n' +
+    '• Bet_Performance (performance history)\n' +
+    '• Master_Dashboard (all KPIs)\n\n' +
+    '⚠️ Config sheet will be PRESERVED.\n\n' +
+    'This is a COMPLETE FRESH START. Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) {
+    ss.toast('❌ Full reset cancelled', 'Reset', 3);
+    return;
+  }
+  
+  try {
+    ss.toast('🔄 Resetting all sheets...', 'Full Reset', 10);
+    
+    // Reset Sync_Temp
+    let syncSheet = ss.getSheetByName('Sync_Temp');
+    if (syncSheet) {
+      syncSheet.clear();
+      const canonicalHeaders = ['League', 'Date', 'Time', 'Match', 'Pick', 'Type', 'Odds', 'Confidence', 'EV'];
+      syncSheet.getRange(1, 1, 1, canonicalHeaders.length).setValues([canonicalHeaders])
+        .setFontWeight('bold')
+        .setBackground('#ff9900')
+        .setFontColor('#ffffff');
+      syncSheet.getRange('A2').setValue('⏳ Run "Sync All Leagues" to populate');
+      syncSheet.getRange('A2:I2').merge().setFontStyle('italic').setFontColor('#999999');
+    }
+    
+    // Reset Results_Temp
+    let resultsSheet = ss.getSheetByName('Results_Temp');
+    if (resultsSheet) {
+      resultsSheet.clear();
+      const resultsHeaders = ['League', 'Game Type', 'Home', 'Away', 'Date', 'Time', 'Prob %', 'Pred', 'Pred Score', 'Avg', 'Odds', 'Q1', 'Q2', 'Q3', 'Q4', 'OT', 'Status', 'FT Score'];
+      resultsSheet.getRange(1, 1, 1, resultsHeaders.length).setValues([resultsHeaders])
+        .setFontWeight('bold')
+        .setBackground('#38761d')
+        .setFontColor('#ffffff');
+    }
+    
+    // Reset Acca_Portfolio
+    let accaSheet = ss.getSheetByName('Acca_Portfolio');
+    if (accaSheet) {
+      accaSheet.clear();
+      accaSheet.getRange('A1:J1').merge()
+        .setValue('🎰 MA GOLIDE - ACCUMULATOR PORTFOLIO')
+        .setFontWeight('bold')
+        .setFontSize(14)
+        .setBackground('#4a86e8')
+        .setFontColor('#ffffff');
+      accaSheet.getRange('A3').setValue('⏳ Run "Build Portfolio" to create accumulators');
+      accaSheet.getRange('A3:J3').merge().setFontStyle('italic').setFontColor('#999999');
+    }
+    
+    // Reset Acca_Results
+    let accaResultsSheet = ss.getSheetByName('Acca_Results');
+    if (accaResultsSheet) {
+      accaResultsSheet.clear();
+      const headers = ['Acca ID', 'Type', 'Legs', 'Total Odds', 'Avg Conf%', 'Created', 'Window Start', 'Window End', 'Status', 'Legs Won', 'Legs Lost', 'Legs Pending', 'Result'];
+      accaResultsSheet.getRange(1, 1, 1, headers.length).setValues([headers])
+        .setFontWeight('bold')
+        .setBackground('#38761d')
+        .setFontColor('#ffffff');
+    }
+    
+    // Use the dedicated reset functions for complex sheets
+    // Suppress their confirmation dialogs by directly doing the work
+    _resetBetPerformanceSilent(ss);
+    _resetDashboardSilent(ss);
+    
+    ss.toast('✅ All output sheets reset! Ready for fresh start.', 'Success', 5);
+    
+    ui.alert('✅ Full Reset Complete',
+      'All output sheets have been reset.\n\n' +
+      'Your Config sheet with satellite URLs is preserved.\n\n' +
+      'Next steps:\n' +
+      '1. Run "Sync Everything" to pull fresh data\n' +
+      '2. Run "Build Portfolio" to create new accumulators\n' +
+      '3. Run "Analyze Bet Performance" after games finish',
+      ui.ButtonSet.OK);
+    
+  } catch (e) {
+    Logger.log(`[Reset] ERROR: ${e.message}\n${e.stack}`);
+    ui.alert('❌ Reset Error', e.message, ui.ButtonSet.OK);
+  }
+}
+
+// Silent helpers (no confirmation dialogs)
+function _resetBetPerformanceSilent(ss) {
+  let sheet = ss.getSheetByName('Bet_Performance');
+  if (!sheet) sheet = ss.insertSheet('Bet_Performance');
+  sheet.clear();
+  
+  const summaryRows = [
+    ['BET PERFORMANCE REPORT', '', '', '', '', '', ''],
+    ['Generated: Awaiting first analysis', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', ''],
+    ['OVERALL', '', 'BANKERS', '', 'SNIPERS', '', ''],
+    ['Total Bets', 0, 'Total', 0, 'Total', 0, ''],
+    ['Won', 0, 'Won', 0, 'Won', 0, ''],
+    ['Lost', 0, 'Lost', 0, 'Lost', 0, ''],
+    ['Win Rate', 'N/A', 'Win Rate', 'N/A', 'Win Rate', 'N/A', ''],
+    ['', '', '', '', '', '', ''],
+    ['League', 'Match', 'Pick', 'Type', 'Grade', 'Score', 'Details']
+  ];
+  sheet.getRange(1, 1, summaryRows.length, 7).setValues(summaryRows);
+  sheet.getRange(1, 1, 1, 7).merge().setFontWeight('bold').setFontSize(16).setBackground('#2d3436').setFontColor('#ffffff');
+  sheet.getRange(10, 1, 1, 7).setFontWeight('bold').setBackground('#74b9ff');
+}
+
+function _resetDashboardSilent(ss) {
+  let sheet = ss.getSheetByName('Master_Dashboard');
+  if (!sheet) sheet = ss.insertSheet('Master_Dashboard');
+  sheet.clear();
+  
+  sheet.getRange('A1:D1').merge()
+    .setValue('🏀 MA GOLIDE - HIVE MIND DASHBOARD')
+    .setFontWeight('bold').setFontSize(14).setBackground('#674ea7').setFontColor('#ffffff');
+  
+  const kpiData = [
+    ['', ''], ['📊 SYNC STATUS', ''], ['Total Leagues:', 0], ['Active Leagues:', 0], ['Last Sync:', 'Never'],
+    ['', ''], ['📈 BET STATISTICS', ''], ['Total Bets Synced:', 0], ['Bankers:', 0], ['Snipers:', 0],
+    ['', ''], ['🎰 ACCUMULATOR STATS', ''], ['Total Accas Built:', 0], ['Accas Won:', 0], ['Accas Lost:', 0],
+    ['Accas Pending:', 0], ['Win Rate:', 'N/A'], ['', ''], ['💰 PERFORMANCE', ''], ['ROI:', 'N/A']
+  ];
+  sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
+}
+
+
+
+/**
+ * WHY: Reset Master_Dashboard when starting fresh
+ * FIX: Template includes "Risky Bets:" row and "PERFORMANCE" anchor label
+ */
+function resetMasterDashboard() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+
+  var confirm = ui.alert(
+    'Reset Master Dashboard',
+    'This will reset all dashboard metrics to zero.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  try {
+    var sheet = ss.getSheetByName('Master_Dashboard');
+    if (!sheet) sheet = ss.insertSheet('Master_Dashboard');
+    sheet.clear();
+
+    sheet.getRange('A1:D1').merge()
+      .setValue('MA GOLIDE - HIVE MIND DASHBOARD')
+      .setFontWeight('bold')
+      .setFontSize(14)
+      .setBackground('#674ea7')
+      .setFontColor('#ffffff');
+
+    var kpiData = [
+      ['', ''],
+      ['SYNC STATUS', ''],
+      ['Total Leagues:', 0],
+      ['Active Leagues:', 0],
+      ['Last Sync:', 'Never'],
+      ['', ''],
+      ['BET STATISTICS', ''],
+      ['Total Bets Synced:', 0],
+      ['Bankers:', 0],
+      ['Snipers:', 0],
+      ['Risky Bets:', 0],
+      ['Total Games:', 0],
+      ['Finished Games:', 0],
+      ['', ''],
+      ['ACCUMULATOR STATS', ''],
+      ['Total Accas Built:', 0],
+      ['Accas Won:', 0],
+      ['Accas Lost:', 0],
+      ['Accas Pending:', 0],
+      ['Win Rate:', 'N/A'],
+      ['', ''],
+      ['PERFORMANCE', '']
+    ];
+
+    sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
+
+    var sectionRows = [3, 8, 16, 23];
+    sectionRows.forEach(function(r) {
+      try { sheet.getRange(r, 1, 1, 2).setFontWeight('bold').setBackground('#e8e8e8'); } catch (e) {}
+    });
+
+    sheet.setColumnWidth(1, 200);
+    sheet.setColumnWidth(2, 140);
+
+    ss.toast('Dashboard reset complete!', 'Success', 5);
+  } catch (e) {
+    ui.alert('Reset Error', 'Failed to reset:\n\n' + e.message, ui.ButtonSet.OK);
+  }
+}
+
+
+
+function _resetDashboardSilent(ss) {
+  var sheet = ss.getSheetByName('Master_Dashboard');
+  if (!sheet) sheet = ss.insertSheet('Master_Dashboard');
+  sheet.clear();
+
+  sheet.getRange('A1:D1').merge()
+    .setValue('MA GOLIDE - HIVE MIND DASHBOARD')
+    .setFontWeight('bold').setFontSize(14).setBackground('#674ea7').setFontColor('#ffffff');
+
+  var kpiData = [
+    ['', ''],
+    ['SYNC STATUS', ''],
+    ['Total Leagues:', 0],
+    ['Active Leagues:', 0],
+    ['Last Sync:', 'Never'],
+    ['', ''],
+    ['BET STATISTICS', ''],
+    ['Total Bets Synced:', 0],
+    ['Bankers:', 0],
+    ['Snipers:', 0],
+    ['Risky Bets:', 0],
+    ['Total Games:', 0],
+    ['Finished Games:', 0],
+    ['', ''],
+    ['ACCUMULATOR STATS', ''],
+    ['Total Accas Built:', 0],
+    ['Accas Won:', 0],
+    ['Accas Lost:', 0],
+    ['Accas Pending:', 0],
+    ['Win Rate:', 'N/A'],
+    ['', ''],
+    ['PERFORMANCE', '']
+  ];
+
+  sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
+}
+
