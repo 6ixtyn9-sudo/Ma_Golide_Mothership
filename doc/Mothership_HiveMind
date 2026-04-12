@@ -117,10 +117,10 @@ function createHeaderMapWithAliases(headerRow) {
   const map = {};
   
   const aliases = {
-    'confidence': ['confidence', 'conf', 'conf%', 'conf/margin', 'confidence/info', 'probability', 'prob'],
+    'confidence': ['confidence', 'conf', 'conf%', 'conf/margin', 'confidence/info', 'probability', 'prob', 'confidence_pct', 'confidence pct'],
     'ev': ['ev', 'expected value', 'expectedvalue', 'value'],
     'match': ['match', 'game', 'matchup', 'teams'],
-    'pick': ['pick', 'selection', 'bet', 'prediction'],
+    'pick': ['pick', 'selection', 'bet', 'prediction', 'selection_text'],
     'type': ['type', 'bet type', 'bettype', 'category'],
     'odds': ['odds', 'price', 'decimal odds'],
     'league': ['league', 'competition', 'tournament', 'league id'],
@@ -137,7 +137,8 @@ function createHeaderMapWithAliases(headerRow) {
     'q2': ['q2', 'quarter2', 'quarter 2'],
     'q3': ['q3', 'quarter3', 'quarter 3'],
     'q4': ['q4', 'quarter4', 'quarter 4'],
-    'pred': ['pred', 'prediction', 'predicted']
+    'pred': ['pred', 'prediction', 'predicted'],
+    'tier': ['tier', 'tier_code', 'risk tier', 'risktier', 'tier display']
   };
   
   for (let i = 0; i < headerRow.length; i++) {
@@ -404,10 +405,11 @@ function syncAllLeagues() {
         for (let scanRow = 0; scanRow < Math.min(20, betData.length); scanRow++) {
           const rowStrings = betData[scanRow].map(cell => String(cell || '').toLowerCase().trim());
           const hasMatch = rowStrings.includes('match') || rowStrings.includes('game');
-          const hasPick  = rowStrings.includes('pick') || rowStrings.includes('selection');
+          const hasPick  = rowStrings.includes('pick') || rowStrings.includes('selection') || rowStrings.includes('selection_text');
           const hasType  = rowStrings.includes('type');
           const hasLeague= rowStrings.includes('league');
-          if (hasMatch && (hasPick || hasType || hasLeague)) { headerRowIndex = scanRow; break; }
+          const hasHomeAway = rowStrings.includes('home') && rowStrings.includes('away');
+          if ((hasMatch || hasHomeAway) && (hasPick || hasType || hasLeague)) { headerRowIndex = scanRow; break; }
         }
         if (headerRowIndex === -1) { failedLeagues.push(`${leagueName}: No header row in Bet_Slips`); continue; }
 
@@ -423,17 +425,23 @@ function syncAllLeagues() {
         const confCol  = betHeaderMap['confidence'];
         const evCol    = betHeaderMap['ev'];
         const leagueCol= betHeaderMap['league'];
+        const homeCol  = betHeaderMap['home'];
+        const awayCol  = betHeaderMap['away'];
 
         const tierCol  = betHeaderMap['tier']
                       ?? betHeaderMap['risk tier']
                       ?? betHeaderMap['risktier']
                       ?? betHeaderMap['risk_tier'];
 
-        Logger.log(`[BET] Bet_Slips header row (1-indexed): ${headerRowIndex + 1}`);
-        Logger.log(`[BET] Cols: match=${matchCol} pick=${pickCol} date=${dateCol} time=${timeCol} type=${typeCol} odds=${oddsCol} conf=${confCol} ev=${evCol} league=${leagueCol} tier=${tierCol}`);
+        const hasLegacyMatch = matchCol !== undefined;
+        const hasSplitTeams = homeCol !== undefined && awayCol !== undefined;
+        const hasPick = pickCol !== undefined;
 
-        if (matchCol === undefined || pickCol === undefined) {
-          failedLeagues.push(`${leagueName}: Bet_Slips missing Match/Pick columns`);
+        Logger.log(`[BET] Bet_Slips header row (1-indexed): ${headerRowIndex + 1}`);
+        Logger.log(`[BET] Cols: match=${matchCol} pick=${pickCol} home=${homeCol} away=${awayCol} date=${dateCol} time=${timeCol} type=${typeCol} odds=${oddsCol} conf=${confCol} ev=${evCol} league=${leagueCol} tier=${tierCol}`);
+
+        if (!hasPick || (!hasLegacyMatch && !hasSplitTeams)) {
+          failedLeagues.push(`${leagueName}: Bet_Slips missing Match/Pick (or Home/Away + Selection_Text) columns`);
           continue;
         }
 
@@ -444,7 +452,14 @@ function syncAllLeagues() {
 
         for (let i = firstDataRowIndex; i < betData.length; i++) {
           const betRow = betData[i];
-          const matchStr = String(betRow[matchCol] || '').trim();
+          let matchStr = '';
+          if (hasLegacyMatch) {
+            matchStr = String(betRow[matchCol] || '').trim();
+          } else if (hasSplitTeams) {
+            const h = String(betRow[homeCol] || '').trim();
+            const a = String(betRow[awayCol] || '').trim();
+            matchStr = (h && a) ? (h + ' vs ' + a) : '';
+          }
 
           if (!matchStr) { skippedRows++; continue; }
 
