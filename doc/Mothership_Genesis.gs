@@ -40,35 +40,60 @@ function setupMothership() {
   ss.toast(' Constructing Central Command...', 'Ma Golide Mothership', 5);
 
   try {
-    ss.toast('Creating Config sheet...', 'Step 1/6', 3);
+    ss.toast('Creating Config sheet...', 'Step 1/12', 3);
     _createConfigSheet(ss);
     
-    ss.toast('Creating Satellite_Registry sheet...', 'Step 2/6', 3);
+    ss.toast('Creating Satellite_Registry sheet...', 'Step 2/12', 3);
     _createSatelliteRegistrySheet(ss);
     
-    ss.toast('Creating Sync_Temp sheet...', 'Step 3/6', 3);
+    ss.toast('Creating Sync_Temp sheet...', 'Step 3/12', 3);
     _createSyncTempSheet(ss);
     
-    ss.toast('Creating Acca_Portfolio sheet...', 'Step 4/6', 3);
+    ss.toast('Creating Acca_Portfolio sheet...', 'Step 4/12', 3);
     _createAccaPortfolioSheet(ss);
     
-    ss.toast('Creating Acca_Results sheet...', 'Step 5/6', 3);
+    ss.toast('Creating Acca_Results sheet...', 'Step 5/12', 3);
     _createAccaResultsSheet(ss);
     
-    ss.toast('Creating Master_Dashboard sheet...', 'Step 6/6', 3);
+    ss.toast('Creating Master_Dashboard sheet...', 'Step 6/12', 3);
     _createDashboardSheet(ss);
+    
+    ss.toast('Creating Config_Ledger sheet...', 'Step 7/12', 3);
+    _createConfigLedgerSheet(ss);
+    
+    ss.toast('Creating Vault sheets...', 'Step 8/12', 3);
+    _createVaultSheets(ss);
+    
+    ss.toast('Creating Analysis sheets...', 'Step 9/12', 3);
+    _createAnalysisSheets(ss);
+    
+    ss.toast('Creating Performance sheets...', 'Step 10/12', 3);
+    _createPerformanceSheets(ss);
+    
+    ss.toast('Creating Risky Analysis sheets...', 'Step 11/12', 3);
+    _createRiskySheets(ss);
+    
+    ss.toast('Creating Historical sheets...', 'Step 12/12', 3);
+    _createHistoricalSheets(ss);
     
     _cleanupDefaultSheet(ss);
 
-    ss.toast(' Mothership Construction Complete!', 'Success', 5);
+    ss.toast('✅ Mothership Construction Complete!', 'Success', 5);
     ui.alert(
       '🎉 Mothership Ready!',
-      'Successfully created all sheets:\n\n' +
+      'Successfully created all 12 sheets:\n\n' +
       '✅ Config - Register your satellite leagues here\n' +
+      '✅ Satellite_Registry - Satellite URL management\n' +
       '✅ Sync_Temp - Staging area for synced bets\n' +
       '✅ Acca_Portfolio - Your accumulator display\n' +
       '✅ Acca_Results - Track wins/losses\n' +
-      '✅ Master_Dashboard - KPI overview\n\n' +
+      '✅ Master_Dashboard - KPI overview\n' +
+      '✅ Config_Ledger - Configuration with dominant_stamp\n' +
+      '✅ Vault & MA_Vault - Bet vault with purity tracking\n' +
+      '✅ Analysis_Tier1 & MA_Discovery - Analysis sheets\n' +
+      '✅ Performance sheets - League & Bet performance\n' +
+      '✅ Risky analysis sheets - Risky accumulator analysis\n' +
+      '✅ Historical sheets - Results archive & performance log\n\n' +
       '📌 NEXT STEPS:\n' +
       '1. Go to Config sheet\n' +
       '2. Add your satellite spreadsheet URLs\n' +
@@ -1822,6 +1847,201 @@ const SatelliteRegistry_ = {
     return stats;
   }
 };
+
+/**
+ * _createConfigLedgerSheet - Create Config_Ledger sheet with dominant_stamp and stamp_purity
+ */
+function _createConfigLedgerSheet(ss) {
+  let sheet = ss.getSheetByName('Config_Ledger');
+  if (!sheet) {
+    sheet = ss.insertSheet('Config_Ledger');
+  }
+  sheet.clear();
+
+  const headers = [['config_key', 'config_value', 'description', 'last_updated', 'dominant_stamp', 'stamp_purity']];
+  sheet.getRange('A1:F1').setValues(headers)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  // Add default config rows
+  sheet.getRange('A2:F2').setValues([[
+    'system_initialized',
+    'true',
+    'System initialization timestamp',
+    new Date().toISOString(),
+    new Date().toISOString(),
+    '1.0'
+  ]]);
+
+  sheet.autoResizeColumns(1, 6);
+  Logger.log('[Genesis] Config_Ledger sheet created');
+}
+
+/**
+ * _createVaultSheets - Create Vault and MA_Vault sheets
+ */
+function _createVaultSheets(ss) {
+  // Create Vault sheet
+  let vaultSheet = ss.getSheetByName('Vault');
+  if (!vaultSheet) {
+    vaultSheet = ss.insertSheet('Vault');
+  }
+  vaultSheet.clear();
+
+  const vaultHeaders = [['vault_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp']];
+  vaultSheet.getRange('A1:I1').setValues(vaultHeaders)
+    .setFontWeight('bold')
+    .setBackground('#6a1b9a')
+    .setFontColor('#ffffff');
+
+  // Create MA_Vault sheet
+  let maVaultSheet = ss.getSheetByName('MA_Vault');
+  if (!maVaultSheet) {
+    maVaultSheet = ss.insertSheet('MA_Vault');
+  }
+  maVaultSheet.clear();
+
+  const maVaultHeaders = [['vault_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp', 'dominant_stamp']];
+  maVaultSheet.getRange('A1:J1').setValues(maVaultHeaders)
+    .setFontWeight('bold')
+    .setBackground('#6a1b9a')
+    .setFontColor('#ffffff');
+
+  Logger.log('[Genesis] Vault sheets created');
+}
+
+/**
+ * _createAnalysisSheets - Create Analysis_Tier1 and other analysis sheets
+ */
+function _createAnalysisSheets(ss) {
+  // Create Analysis_Tier1
+  let analysisSheet = ss.getSheetByName('Analysis_Tier1');
+  if (!analysisSheet) {
+    analysisSheet = ss.insertSheet('Analysis_Tier1');
+  }
+  analysisSheet.clear();
+
+  const analysisHeaders = [['analysis_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp']];
+  analysisSheet.getRange('A1:I1').setValues(analysisHeaders)
+    .setFontWeight('bold')
+    .setBackground('#ff9900')
+    .setFontColor('#ffffff');
+
+  // Create MA_Discovery
+  let discoverySheet = ss.getSheetByName('MA_Discovery');
+  if (!discoverySheet) {
+    discoverySheet = ss.insertSheet('MA_Discovery');
+  }
+  discoverySheet.clear();
+
+  const discoveryHeaders = [['discovery_id', 'league', 'team', 'opponent', 'edge_type', 'edge_value', 'confidence', 'timestamp']];
+  discoverySheet.getRange('A1:G1').setValues(discoveryHeaders)
+    .setFontWeight('bold')
+    .setBackground('#ff9900')
+    .setFontColor('#ffffff');
+
+  Logger.log('[Genesis] Analysis sheets created');
+}
+
+/**
+ * _createPerformanceSheets - Create performance tracking sheets
+ */
+function _createPerformanceSheets(ss) {
+  // Create League_Performance
+  let leaguePerfSheet = ss.getSheetByName('League_Performance');
+  if (!leaguePerfSheet) {
+    leaguePerfSheet = ss.insertSheet('League_Performance');
+  }
+  leaguePerfSheet.clear();
+
+  const leaguePerfHeaders = [['league', 'total_bets', 'wins', 'losses', 'win_rate', 'avg_odds', 'last_updated']];
+  leaguePerfSheet.getRange('A1:G1').setValues(leaguePerfHeaders)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  // Create Bet_Performance
+  let betPerfSheet = ss.getSheetByName('Bet_Performance');
+  if (!betPerfSheet) {
+    betPerfSheet = ss.insertSheet('Bet_Performance');
+  }
+  betPerfSheet.clear();
+
+  const betPerfHeaders = [['bet_id', 'league', 'team', 'opponent', 'bet_type', 'result', 'payout', 'timestamp']];
+  betPerfSheet.getRange('A1:H1').setValues(betPerfHeaders)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  Logger.log('[Genesis] Performance sheets created');
+}
+
+/**
+ * _createRiskySheets - Create risky accumulator analysis sheets
+ */
+function _createRiskySheets(ss) {
+  // Create Risky_Bets_Analysis
+  let riskySheet = ss.getSheetByName('Risky_Bets_Analysis');
+  if (!riskySheet) {
+    riskySheet = ss.insertSheet('Risky_Bets_Analysis');
+  }
+  riskySheet.clear();
+
+  const riskyHeaders = [['bet_id', 'league', 'team', 'opponent', 'risk_level', 'confidence', 'recommendation', 'timestamp']];
+  riskySheet.getRange('A1:G1').setValues(riskyHeaders)
+    .setFontWeight('bold')
+    .setBackground('#ff6b6b')
+    .setFontColor('#ffffff');
+
+  // Create Risky_Accas
+  let riskyAccaSheet = ss.getSheetByName('Risky_Accas');
+  if (!riskyAccaSheet) {
+    riskyAccaSheet = ss.insertSheet('Risky_Accas');
+  }
+  riskyAccaSheet.clear();
+
+  const riskyAccaHeaders = [['acca_id', 'total_bets', 'risk_score', 'expected_value', 'recommendation', 'timestamp']];
+  riskyAccaSheet.getRange('A1:F1').setValues(riskyAccaHeaders)
+    .setFontWeight('bold')
+    .setBackground('#ff6b6b')
+    .setFontColor('#ffffff');
+
+  Logger.log('[Genesis] Risky analysis sheets created');
+}
+
+/**
+ * _createHistoricalSheets - Create historical tracking sheets
+ */
+function _createHistoricalSheets(ss) {
+  // Create Historical_Results_Archive
+  let histResultsSheet = ss.getSheetByName('Historical_Results_Archive');
+  if (!histResultsSheet) {
+    histResultsSheet = ss.insertSheet('Historical_Results_Archive');
+  }
+  histResultsSheet.clear();
+
+  const histResultsHeaders = [['result_id', 'event_date', 'league', 'team', 'opponent', 'result', 'payout', 'timestamp']];
+  histResultsSheet.getRange('A1:H1').setValues(histResultsHeaders)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  // Create Historical_Performance_Log
+  let histPerfSheet = ss.getSheetByName('Historical_Performance_Log');
+  if (!histPerfSheet) {
+    histPerfSheet = ss.insertSheet('Historical_Performance_Log');
+  }
+  histPerfSheet.clear();
+
+  const histPerfHeaders = [['log_id', 'timestamp', 'metric', 'value', 'description']];
+  histPerfSheet.getRange('A1:E1').setValues(histPerfHeaders)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  Logger.log('[Genesis] Historical sheets created');
+}
 
 /**
  * setupAllSheets - Enhanced setupAllSheets with Satellite_Registry integration
