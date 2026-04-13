@@ -10,6 +10,53 @@
  */
 
 /**
+ * Sanity check function to prevent column mismatch errors
+ * @param {Array} headers - Header array to validate
+ * @param {string} rangeStr - Range string (e.g., 'A1:H1')
+ * @returns {boolean} True if valid
+ */
+function _validateHeadersAndRange(headers, rangeStr) {
+  if (!headers || !Array.isArray(headers) || headers.length === 0) {
+    throw new Error('Invalid headers array');
+  }
+  
+  if (!rangeStr || typeof rangeStr !== 'string') {
+    throw new Error('Invalid range string');
+  }
+  
+  // Extract column count from range (e.g., 'A1:H1' -> 8 columns)
+  const rangeMatch = rangeStr.match(/^([A-Z]+)\d+:([A-Z]+)\d+$/);
+  if (!rangeMatch) {
+    throw new Error(`Invalid range format: ${rangeStr}`);
+  }
+  
+  const startCol = rangeMatch[1];
+  const endCol = rangeMatch[2];
+  const expectedCols = _columnLetterToNumber(endCol) - _columnLetterToNumber(startCol) + 1;
+  
+  const actualCols = headers.length;
+  
+  if (actualCols !== expectedCols) {
+    throw new Error(`Column mismatch: headers have ${actualCols} columns but range ${rangeStr} expects ${expectedCols} columns`);
+  }
+  
+  return true;
+}
+
+/**
+ * Convert column letter to number (A=1, B=2, ..., Z=26, AA=27, etc.)
+ * @param {string} col - Column letter(s)
+ * @returns {number} Column number
+ */
+function _columnLetterToNumber(col) {
+  let result = 0;
+  for (let i = 0; i < col.length; i++) {
+    result = result * 26 + (col.charCodeAt(i) - 'A'.charCodeAt(0) + 1);
+  }
+  return result;
+}
+
+/**
  * WHY: To establish a standardized, repeatable structure for the central hub
  * WHAT: Creates and formats all required Mothership sheets
  * HOW: Uses SpreadsheetApp to create Config, Sync_Temp, Acca_Portfolio, Acca_Results, Master_Dashboard
@@ -119,6 +166,9 @@ function _createConfigSheet(ss) {
     'League ID', 'League Name', 'File URL', 'Sport Type', 'Status', 'Quarters', 'Last Sync', 'assayer_sheet_id'
   ];
 
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(headers, 'A1:H1');
+
   sheet.getRange('A1:H1').setValues([headers])
     .setFontWeight('bold')
     .setBackground('#4a86e8')
@@ -157,6 +207,10 @@ function _createSyncTempSheet(ss) {
   sheet.clear();
   
   const headers = [['League', 'Time', 'Match', 'Pick', 'Type', 'Odds', 'Confidence', 'EV']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(headers[0], 'A1:H1');
+  
   sheet.getRange('A1:H1').setValues(headers)
     .setFontWeight('bold')
     .setBackground('#ff9900')
@@ -212,6 +266,10 @@ function _createAccaResultsSheet(ss) {
     'Created', 'Window Start', 'Window End',
     'Status', 'Legs Won', 'Legs Lost', 'Legs Pending', 'Result'
   ]];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(headers[0], 'A1:M1');
+  
   sheet.getRange('A1:M1').setValues(headers)
     .setFontWeight('bold')
     .setBackground('#38761d')
@@ -309,6 +367,10 @@ function _createConfigLedgerSheet(ss) {
   sheet.clear();
 
   const headers = [['config_key', 'config_value', 'description', 'last_updated', 'dominant_stamp', 'stamp_purity']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(headers[0], 'A1:F1');
+  
   sheet.getRange('A1:F1').setValues(headers)
     .setFontWeight('bold')
     .setBackground('#4a86e8')
@@ -340,6 +402,10 @@ function _createVaultSheets(ss) {
   vaultSheet.clear();
 
   const vaultHeaders = [['vault_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(vaultHeaders[0], 'A1:I1');
+  
   vaultSheet.getRange('A1:I1').setValues(vaultHeaders)
     .setFontWeight('bold')
     .setBackground('#6a1b9a')
@@ -353,6 +419,10 @@ function _createVaultSheets(ss) {
   maVaultSheet.clear();
 
   const maVaultHeaders = [['vault_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp', 'dominant_stamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(maVaultHeaders[0], 'A1:J1');
+  
   maVaultSheet.getRange('A1:J1').setValues(maVaultHeaders)
     .setFontWeight('bold')
     .setBackground('#6a1b9a')
@@ -373,6 +443,10 @@ function _createAnalysisSheets(ss) {
   analysisSheet.clear();
 
   const analysisHeaders = [['analysis_id', 'league', 'team', 'opponent', 'bet_type', 'confidence', 'grade', 'purity', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(analysisHeaders[0], 'A1:I1');
+  
   analysisSheet.getRange('A1:I1').setValues(analysisHeaders)
     .setFontWeight('bold')
     .setBackground('#ff9900')
@@ -386,6 +460,10 @@ function _createAnalysisSheets(ss) {
   discoverySheet.clear();
 
   const discoveryHeaders = [['discovery_id', 'league', 'team', 'opponent', 'edge_type', 'edge_value', 'confidence', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(discoveryHeaders[0], 'A1:H1');
+  
   discoverySheet.getRange('A1:H1').setValues(discoveryHeaders)
     .setFontWeight('bold')
     .setBackground('#ff9900')
@@ -406,6 +484,10 @@ function _createPerformanceSheets(ss) {
   leaguePerfSheet.clear();
 
   const leaguePerfHeaders = [['league', 'total_bets', 'wins', 'losses', 'win_rate', 'avg_odds', 'last_updated']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(leaguePerfHeaders[0], 'A1:G1');
+  
   leaguePerfSheet.getRange('A1:G1').setValues(leaguePerfHeaders)
     .setFontWeight('bold')
     .setBackground('#4a86e8')
@@ -419,6 +501,10 @@ function _createPerformanceSheets(ss) {
   betPerfSheet.clear();
 
   const betPerfHeaders = [['bet_id', 'league', 'team', 'opponent', 'bet_type', 'result', 'payout', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(betPerfHeaders[0], 'A1:H1');
+  
   betPerfSheet.getRange('A1:H1').setValues(betPerfHeaders)
     .setFontWeight('bold')
     .setBackground('#4a86e8')
@@ -439,7 +525,11 @@ function _createRiskySheets(ss) {
   riskySheet.clear();
 
   const riskyHeaders = [['bet_id', 'league', 'team', 'opponent', 'risk_level', 'confidence', 'recommendation', 'timestamp']];
-  riskySheet.getRange('A1:G1').setValues(riskyHeaders)
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(riskyHeaders[0], 'A1:H1');
+  
+  riskySheet.getRange('A1:H1').setValues(riskyHeaders)
     .setFontWeight('bold')
     .setBackground('#ff6b6b')
     .setFontColor('#ffffff');
@@ -452,6 +542,10 @@ function _createRiskySheets(ss) {
   riskyAccaSheet.clear();
 
   const riskyAccaHeaders = [['acca_id', 'total_bets', 'risk_score', 'expected_value', 'recommendation', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(riskyAccaHeaders[0], 'A1:F1');
+  
   riskyAccaSheet.getRange('A1:F1').setValues(riskyAccaHeaders)
     .setFontWeight('bold')
     .setBackground('#ff6b6b')
@@ -472,6 +566,10 @@ function _createHistoricalSheets(ss) {
   histResultsSheet.clear();
 
   const histResultsHeaders = [['result_id', 'event_date', 'league', 'team', 'opponent', 'result', 'payout', 'timestamp']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(histResultsHeaders[0], 'A1:H1');
+  
   histResultsSheet.getRange('A1:H1').setValues(histResultsHeaders)
     .setFontWeight('bold')
     .setBackground('#4a86e8')
@@ -485,6 +583,10 @@ function _createHistoricalSheets(ss) {
   histPerfSheet.clear();
 
   const histPerfHeaders = [['log_id', 'timestamp', 'metric', 'value', 'description']];
+  
+  // Sanity check to prevent column mismatch
+  _validateHeadersAndRange(histPerfHeaders[0], 'A1:E1');
+  
   histPerfSheet.getRange('A1:E1').setValues(histPerfHeaders)
     .setFontWeight('bold')
     .setBackground('#4a86e8')
