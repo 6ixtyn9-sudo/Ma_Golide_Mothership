@@ -297,69 +297,7 @@ function _cleanupDefaultSheet(ss) {
   }
 }
 
-// ... rest of the code remains the same ...
-    
-    if (!satellite.id || satellite.id.trim() === "") {
-      return false;
-    }
-    
-    return true;
-  },
   
-  // --------------------------------------------------------------------------
-  // generateId - Generate a unique satellite ID
-  // @returns {string} Unique satellite ID
-  // --------------------------------------------------------------------------
-  generateId() {
-    return "SAT_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5).toUpperCase();
-  },
-  
-  // --------------------------------------------------------------------------
-  // extractNameFromUrl - Extract satellite name from Google Sheets URL
-  // @param {string} url - Google Sheets URL
-  // @returns {string} Extracted name
-  // --------------------------------------------------------------------------
-  extractNameFromUrl(url) {
-    try {
-      // Extract from URL path or use default
-      const urlObj = new URL(url);
-      const pathParts = urlObj.pathname.split('/');
-      
-      // Try to find a meaningful name from the path
-      for (const part of pathParts) {
-        if (part && part.length > 3 && part !== 'spreadsheets' && part !== 'd') {
-          return part.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
-      }
-      
-      // Fallback to domain-based naming
-      return "Satellite " + urlObj.hostname.replace('docs.google.com', 'Google Sheets');
-    } catch (err) {
-      return "Unknown Satellite";
-    }
-  },
-  
-  // --------------------------------------------------------------------------
-  // getRegistryStats - Get registry statistics
-  // @param {Spreadsheet} ss - Spreadsheet object
-  // @returns {Object} Statistics object
-  // --------------------------------------------------------------------------
-  getRegistryStats(ss) {
-    const satellites = this.loadAll(ss);
-    
-    const stats = {
-      total: satellites.length,
-      active: satellites.filter(s => s.status === "ACTIVE").length,
-      inactive: satellites.filter(s => s.status === "INACTIVE").length,
-      unknown: satellites.filter(s => s.status === "UNKNOWN").length,
-      error: satellites.filter(s => s.status === "ERROR").length,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    return stats;
-  }
-};
-
 /**
  * _createConfigLedgerSheet - Create Config_Ledger sheet with dominant_stamp and stamp_purity
  */
