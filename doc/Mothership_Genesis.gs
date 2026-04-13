@@ -37,27 +37,30 @@ function setupMothership() {
     return;
   }
   
-  ss.toast('🚀 Constructing Central Command...', 'Ma Golide Mothership', 5);
+  ss.toast(' Constructing Central Command...', 'Ma Golide Mothership', 5);
 
   try {
-    ss.toast('📋 Creating Config sheet...', 'Step 1/5', 3);
+    ss.toast('Creating Config sheet...', 'Step 1/6', 3);
     _createConfigSheet(ss);
     
-    ss.toast('🔄 Creating Sync_Temp sheet...', 'Step 2/5', 3);
+    ss.toast('Creating Satellite_Registry sheet...', 'Step 2/6', 3);
+    _createSatelliteRegistrySheet(ss);
+    
+    ss.toast('Creating Sync_Temp sheet...', 'Step 3/6', 3);
     _createSyncTempSheet(ss);
     
-    ss.toast('🎰 Creating Acca_Portfolio sheet...', 'Step 3/5', 3);
+    ss.toast('Creating Acca_Portfolio sheet...', 'Step 4/6', 3);
     _createAccaPortfolioSheet(ss);
     
-    ss.toast('📊 Creating Acca_Results sheet...', 'Step 4/5', 3);
+    ss.toast('Creating Acca_Results sheet...', 'Step 5/6', 3);
     _createAccaResultsSheet(ss);
     
-    ss.toast('📈 Creating Master_Dashboard sheet...', 'Step 5/5', 3);
+    ss.toast('Creating Master_Dashboard sheet...', 'Step 6/6', 3);
     _createDashboardSheet(ss);
     
     _cleanupDefaultSheet(ss);
 
-    ss.toast('✅ Mothership Construction Complete!', 'Success', 5);
+    ss.toast(' Mothership Construction Complete!', 'Success', 5);
     ui.alert(
       '🎉 Mothership Ready!',
       'Successfully created all sheets:\n\n' +
@@ -143,6 +146,61 @@ function _createConfigSheet(ss) {
     .setFontColor('#666666');
 
   Logger.log('[Genesis] Config sheet created (with assayer_sheet_id)');
+}
+
+/**
+ * WHY: Satellite_Registry sheet manages satellite spreadsheet URLs and status
+ * WHAT: Creates the registry for satellite connections with user-friendly interface
+ * HOW: Sets up headers for satellite management
+ */
+function _createSatelliteRegistrySheet(ss) {
+  let sheet = ss.getSheetByName('Satellite_Registry');
+  if (!sheet) {
+    sheet = ss.insertSheet('Satellite_Registry', 1);
+  }
+  sheet.clear();
+
+  const headers = [[
+    'satellite_id', 'spreadsheet_url', 'satellite_name', 'status', 'last_sync', 'config_version', 'notes'
+  ]];
+
+  sheet.getRange('A1:G1').setValues(headers)
+    .setFontWeight('bold')
+    .setBackground('#4a86e8')
+    .setFontColor('#ffffff');
+
+  // Add example row
+  sheet.getRange('A2:G2').setValues([[
+    'SAT_001',
+    'https://docs.google.com/spreadsheets/d/YOUR_SATELLITE_ID_HERE',
+    'Example Satellite',
+    'ACTIVE',
+    new Date().toISOString(),
+    'v1.0',
+    'Paste satellite URLs in column B'
+  ]]);
+
+  // Set column widths
+  sheet.setColumnWidth(1, 100);
+  sheet.setColumnWidth(2, 400);
+  sheet.setColumnWidth(3, 150);
+  sheet.setColumnWidth(4, 100);
+  sheet.setColumnWidth(5, 150);
+  sheet.setColumnWidth(6, 120);
+  sheet.setColumnWidth(7, 300);
+
+  // Add instructions
+  sheet.getRange('I1').setValue('Satellite Registry Instructions:')
+    .setFontWeight('bold')
+    .setFontSize(11);
+  sheet.getRange('I2').setValue('1. Paste satellite spreadsheet URLs in column B')
+    .setFontColor('#666666');
+  sheet.getRange('I3').setValue('2. Status: ACTIVE, INACTIVE, UNKNOWN, ERROR')
+    .setFontColor('#666666');
+  sheet.getRange('I4').setValue('3. Run sync functions to update last_sync')
+    .setFontColor('#666666');
+
+  Logger.log('[Genesis] Satellite_Registry sheet created');
 }
 
 /**
