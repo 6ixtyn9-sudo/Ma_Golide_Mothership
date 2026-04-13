@@ -75,7 +75,8 @@ if (typeof MIC_DEFAULTS === 'undefined') {
  * Column names: PascalCase  |  Keys: UPPER_SNAKE_CASE
  * =========================================================== */
 
-const SCHEMA = {
+if (typeof SCHEMA === 'undefined') {
+  const SCHEMA = {
 
   BETS_ARCHIVE: [
   // ── Core identity
@@ -153,6 +154,7 @@ const SCHEMA = {
     'League','Time','Match','Pick','Type','Odds','Confidence','EV'
   ]
 };
+}
 
 
 
