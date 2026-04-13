@@ -107,76 +107,50 @@ function setupMothership() {
 }
 
 /**
- * WHY: Config sheet stores all satellite league connections
- * WHAT: Creates the registry for satellite spreadsheets
- * HOW: Sets up headers and example row
+ * WHY: Config sheet is the central configuration hub for the Mothership
+ * WHAT: Creates a clean, efficient configuration interface
+ * HOW: Sets up headers for satellite management
  */
 function _createConfigSheet(ss) {
   let sheet = ss.getSheetByName('Config');
   if (!sheet) {
-    sheet = ss.insertSheet('Config', 0);
+    sheet = ss.insertSheet('Config', 1);
   }
   sheet.clear();
 
-  // PHASE 1: add assayer_sheet_id column (H)
-  const headers = [[
-    'League ID', 'League Name', 'File URL', 'Sport Type', 'Status', 'Quarters', 'Last Sync',
-    'assayer_sheet_id'
-  ]];
+  const headers = [
+    'League ID', 'League Name', 'File URL', 'Sport Type', 'Status', 'Quarters', 'Last Sync', 'assayer_sheet_id'
+  ];
 
-  sheet.getRange('A1:H1').setValues(headers)
+  sheet.getRange('A1:H1').setValues([headers])
     .setFontWeight('bold')
     .setBackground('#4a86e8')
     .setFontColor('#ffffff');
 
-  sheet.getRange('A2:H2').setValues([[
-    'NBA_2025',
-    'NBA',
-    'PASTE_SATELLITE_URL_HERE',
-    'Basketball',
-    'Active',
-    4,
-    '',
-    'PASTE_ASSAYER_SHEET_ID_HERE'
-  ]]);
+  // Add example rows
+  sheet.getRange('A2:H4').setValues([
+    ['NBA_2025', 'NBA', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', ''],
+    ['EURO_2025', 'Euroleague', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', ''],
+    ['', '', '', '', '', '', '', '']
+  ]);
 
-  sheet.getRange('A3:H3').setValues([[
-    'EURO_2025',
-    'Euroleague',
-    'PASTE_ANOTHER_URL_HERE',
-    'Basketball',
-    'Active',
-    4,
-    '',
-    'PASTE_ASSAYER_SHEET_ID_HERE'
-  ]]).setFontColor('#999999');
-
-  sheet.setColumnWidth(3, 400);
-  sheet.setColumnWidth(8, 320);
-  sheet.autoResizeColumns(1, 2);
-  sheet.autoResizeColumns(4, 7);
-
-  sheet.getRange('I1').setValue('📌 Instructions:')
-    .setFontWeight('bold')
-    .setFontSize(11);
-  sheet.getRange('I2').setValue('1. Replace URLs with your satellite spreadsheet URLs')
-    .setFontColor('#666666');
-  sheet.getRange('I3').setValue('2. Set Status to "Active" or "Inactive"')
-    .setFontColor('#666666');
-  sheet.getRange('I4').setValue('3. Run "Sync All Leagues" from the menu')
-    .setFontColor('#666666');
-  sheet.getRange('I5').setValue('4. Quarters = number of periods (4 for NBA, 2 for soccer)')
-    .setFontColor('#666666');
-  sheet.getRange('I6').setValue('5. Set assayer_sheet_id to enable Assayer edges + league purity routing')
-    .setFontColor('#666666');
+  // Format columns
+  sheet.setColumnWidth(1, 100);   // League ID
+  sheet.setColumnWidth(2, 150);   // League Name
+  sheet.setColumnWidth(3, 400);   // File URL
+  sheet.setColumnWidth(4, 120);   // Sport Type
+  sheet.setColumnWidth(5, 80);    // Status
+  sheet.setColumnWidth(6, 100);   // Quarters
+  sheet.setColumnWidth(7, 120);   // Last Sync
+  sheet.setColumnWidth(8, 150);   // assayer_sheet_id
 
   Logger.log('[Genesis] Config sheet created (with assayer_sheet_id)');
 }
 
 /**
  * WHY: Satellite_Registry sheet manages satellite spreadsheet URLs and status
- * WHAT: Creates the registry for satellite connections with user-friendly interface
- * HOW: Sets up headers for satellite management
+ * WHAT: Creates streamlined registry for satellite connections
+ * HOW: Clean, efficient interface for satellite management
  */
 function _createSatelliteRegistrySheet(ss) {
   let sheet = ss.getSheetByName('Satellite_Registry');
@@ -185,42 +159,29 @@ function _createSatelliteRegistrySheet(ss) {
   }
   sheet.clear();
 
-  const headers = [[
-    'satellite_id', 'spreadsheet_url', 'satellite_name', 'status', 'last_sync', 'config_version', 'notes'
-  ]];
+  const headers = [
+    'satellite_id', 'spreadsheet_url', 'satellite_name', 'status', 'last_sync', 'config_version'
+  ];
 
-  sheet.getRange('A1:G1').setValues(headers)
+  sheet.getRange('A1:F1').setValues([headers])
     .setFontWeight('bold')
     .setBackground('#4a86e8')
     .setFontColor('#ffffff');
 
-  // Add example row
-  sheet.getRange('A2:G2').setValues([[
-    'SAT_001',
-    'https://docs.google.com/spreadsheets/d/YOUR_SATELLITE_ID_HERE',
-    'Example Satellite',
-    'ACTIVE',
-    new Date().toISOString(),
-    'v1.0',
-    'Paste satellite URLs in column B'
-  ]]);
+  // Add example rows
+  sheet.getRange('A2:F4').setValues([
+    ['SAT_001', 'https://docs.google.com/spreadsheets/d/...', 'NBA League', 'Active', '', ''],
+    ['SAT_002', 'https://docs.google.com/spreadsheets/d/...', 'Euro League', 'Active', '', ''],
+    ['', '', '', '', '', '', '']
+  ]);
 
-  // Set column widths
-  sheet.setColumnWidth(1, 100);
-  sheet.setColumnWidth(2, 400);
-  sheet.setColumnWidth(3, 150);
-  sheet.setColumnWidth(4, 100);
-  sheet.setColumnWidth(5, 150);
-  sheet.setColumnWidth(6, 120);
-  sheet.setColumnWidth(7, 300);
-
-  // Add instructions
-  sheet.getRange('I1').setValue('Satellite Registry Instructions:')
-    .setFontWeight('bold')
-    .setFontSize(11);
-  sheet.getRange('I2').setValue('1. Paste satellite spreadsheet URLs in column B')
-    .setFontColor('#666666');
-  sheet.getRange('I3').setValue('2. Status: ACTIVE, INACTIVE, UNKNOWN, ERROR')
+  // Format columns
+  sheet.setColumnWidth(1, 80);   // satellite_id
+  sheet.setColumnWidth(2, 400);  // spreadsheet_url
+  sheet.setColumnWidth(3, 150);  // satellite_name
+  sheet.setColumnWidth(4, 80);   // status
+  sheet.setColumnWidth(5, 120);  // last_sync
+  sheet.setColumnWidth(6, 120);  // config_version
     .setFontColor('#666666');
   sheet.getRange('I4').setValue('3. Run sync functions to update last_sync')
     .setFontColor('#666666');
