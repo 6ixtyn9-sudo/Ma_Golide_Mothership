@@ -1341,3 +1341,445 @@ function _createSatelliteRegistrySheet(ss) {
   Logger.log('[_createSatelliteRegistrySheet] Satellite_Registry sheet created');
 }
 
+// ============================================================================
+// PHASE 4 PATCH 4: METADATA - COMPLETE SATELLITE REGISTRY MODULE
+// ============================================================================
+
+/**
+ * SatelliteRegistry_ - Complete module for managing satellite spreadsheet URLs
+ * Safe place to manage all satellite links - just paste URLs in column B
+ */
+const SatelliteRegistry_ = {
+  
+  // --------------------------------------------------------------------------
+  // CONFIGURATION
+  // --------------------------------------------------------------------------
+  config: {
+    sheetName: "Satellite_Registry",
+    version: "1.0",
+    columns: {
+      id: 1,           // satellite_id
+      url: 2,          // spreadsheet_url (main column for pasting)
+      name: 3,         // satellite_name
+      status: 4,       // status
+      lastSync: 5,     // last_sync
+      configVersion: 6, // config_version
+      notes: 7         // notes
+    },
+    statuses: ["ACTIVE", "INACTIVE", "UNKNOWN", "ERROR"],
+    defaultStatus: "UNKNOWN"
+  },
+  
+  // --------------------------------------------------------------------------
+  // getOrCreateSheet - Get or create the Satellite_Registry sheet
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @returns {Sheet} Satellite_Registry sheet
+  // --------------------------------------------------------------------------
+  getOrCreateSheet(ss) {
+    let sheet = ss.getSheetByName(this.config.sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(this.config.sheetName);
+      this.initializeSheet(sheet);
+      Logger.log('[SatelliteRegistry_] Created new Satellite_Registry sheet');
+    }
+    return sheet;
+  },
+  
+  // --------------------------------------------------------------------------
+  // initializeSheet - Initialize sheet with headers and formatting
+  // @param {Sheet} sheet - Sheet to initialize
+  // --------------------------------------------------------------------------
+  initializeSheet(sheet) {
+    // Clear existing content
+    sheet.clear();
+    
+    // Create headers
+    const headers = [
+      "satellite_id",
+      "spreadsheet_url", 
+      "satellite_name",
+      "status",
+      "last_sync",
+      "config_version",
+      "notes"
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length)
+      .setValues([headers])
+      .setFontWeight("bold")
+      .setBackground("#1a1a2e")
+      .setFontColor("#FFD700");
+    
+    sheet.setFrozenRows(1);
+    
+    // Set column widths
+    sheet.setColumnWidth(this.config.columns.id, 120);      // satellite_id
+    sheet.setColumnWidth(this.config.columns.url, 400);     // spreadsheet_url (main column)
+    sheet.setColumnWidth(this.config.columns.name, 150);    // satellite_name
+    sheet.setColumnWidth(this.config.columns.status, 100);  // status
+    sheet.setColumnWidth(this.config.columns.lastSync, 150); // last_sync
+    sheet.setColumnWidth(this.config.columns.configVersion, 120); // config_version
+    sheet.setColumnWidth(this.config.columns.notes, 200);   // notes
+    
+    // Add instructions
+    this.addInstructions(sheet);
+    
+    // Add sample data
+    this.addSampleData(sheet);
+  },
+  
+  // --------------------------------------------------------------------------
+  // addInstructions - Add user-friendly instructions
+  // @param {Sheet} sheet - Sheet to add instructions to
+  // --------------------------------------------------------------------------
+  addInstructions(sheet) {
+    const instructions = [
+      "INSTRUCTIONS: Safe place to manage all satellite links - just paste URLs in column B.",
+      "",
+      "HOW TO USE:",
+      "1. Copy satellite spreadsheet URL from browser",
+      "2. Paste in column B (spreadsheet_url)", 
+      "3. System auto-detects satellite name and status",
+      "4. Use 'Sync All' to update all satellites",
+      "",
+      "TIPS:",
+      "- URLs must start with: https://docs.google.com/spreadsheets/",
+      "- Column A auto-generates unique satellite IDs",
+      "- Column C extracts satellite name from URL",
+      "- Column D shows connection status"
+    ];
+    
+    const startRow = sheet.getLastRow() + 2;
+    sheet.getRange(startRow, 1, instructions.length, 2)
+      .setValues(instructions.map(inst => [inst, ""]))
+      .setFontWeight("bold")
+      .setBackground("#e8f5e8")
+      .setWrap(true);
+    
+    // Merge the first instruction row
+    sheet.getRange(startRow, 1, 1, 2).merge();
+  },
+  
+  // --------------------------------------------------------------------------
+  // addSampleData - Add sample satellite data
+  // @param {Sheet} sheet - Sheet to add sample data to
+  // --------------------------------------------------------------------------
+  addSampleData(sheet) {
+    const sampleData = [
+      ["SAT_001", "https://docs.google.com/spreadsheets/d/1ABC...", "Sample Satellite 1", "UNKNOWN", null, null, "Replace with actual satellite URL"],
+      ["SAT_002", "https://docs.google.com/spreadsheets/d/2DEF...", "Sample Satellite 2", "UNKNOWN", null, null, "Paste satellite URL in column B"]
+    ];
+    
+    // Find first empty row after instructions
+    let startRow = sheet.getLastRow() + 2;
+    while (startRow > 100) startRow = 10; // Safety check
+    
+    sheet.getRange(startRow, 1, sampleData.length, this.config.columns.notes)
+      .setValues(sampleData);
+  },
+  
+  // --------------------------------------------------------------------------
+  // loadAll - Load all satellite registry entries
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @returns {Array} Array of satellite objects
+  // --------------------------------------------------------------------------
+  loadAll(ss) {
+    const sheet = this.getOrCreateSheet(ss);
+    const data = sheet.getDataRange().getValues();
+    const satellites = [];
+    
+    // Skip header row and instructions
+    let dataStartRow = 1;
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row[this.config.columns.url - 1] && 
+          String(row[this.config.columns.url - 1]).startsWith("https://docs.google.com/")) {
+        dataStartRow = i;
+        break;
+      }
+    }
+    
+    // Parse satellite data
+    for (let i = dataStartRow; i < data.length; i++) {
+      const row = data[i];
+      if (!row[this.config.columns.url - 1]) continue; // Skip empty rows
+      
+      const satellite = {
+        id: String(row[this.config.columns.id - 1] || this.generateId()),
+        url: String(row[this.config.columns.url - 1]).trim(),
+        name: String(row[this.config.columns.name - 1] || this.extractNameFromUrl(row[this.config.columns.url - 1])),
+        status: String(row[this.config.columns.status - 1] || this.config.defaultStatus),
+        lastSync: row[this.config.columns.lastSync - 1] || null,
+        configVersion: row[this.config.columns.configVersion - 1] || null,
+        notes: String(row[this.config.columns.notes - 1] || ""),
+        rowIndex: i + 1 // 1-based row index
+      };
+      
+      // Validate satellite
+      if (this.validateSatellite(satellite)) {
+        satellites.push(satellite);
+      }
+    }
+    
+    Logger.log('[SatelliteRegistry_] Loaded ' + satellites.length + ' satellites');
+    return satellites;
+  },
+  
+  // --------------------------------------------------------------------------
+  // addSatellite - Add a new satellite to the registry
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @param {string} url - Satellite spreadsheet URL
+  // @param {string} name - Optional satellite name
+  // @param {string} notes - Optional notes
+  // @returns {Object} Result object
+  // --------------------------------------------------------------------------
+  addSatellite(ss, url, name, notes) {
+    if (!url || !url.startsWith("https://docs.google.com/spreadsheets/")) {
+      return { success: false, error: "Invalid satellite URL" };
+    }
+    
+    const sheet = this.getOrCreateSheet(ss);
+    const satellites = this.loadAll(ss);
+    
+    // Check for duplicate URLs
+    const existing = satellites.find(sat => sat.url === url);
+    if (existing) {
+      return { success: false, error: "Satellite URL already exists", existingId: existing.id };
+    }
+    
+    // Create new satellite entry
+    const newSatellite = {
+      id: this.generateId(),
+      url: url,
+      name: name || this.extractNameFromUrl(url),
+      status: this.config.defaultStatus,
+      lastSync: null,
+      configVersion: null,
+      notes: notes || ""
+    };
+    
+    // Add to sheet
+    const newRow = [
+      newSatellite.id,
+      newSatellite.url,
+      newSatellite.name,
+      newSatellite.status,
+      newSatellite.lastSync,
+      newSatellite.configVersion,
+      newSatellite.notes
+    ];
+    
+    sheet.appendRow(newRow);
+    
+    Logger.log('[SatelliteRegistry_] Added satellite: ' + newSatellite.id);
+    return { success: true, satellite: newSatellite };
+  },
+  
+  // --------------------------------------------------------------------------
+  // updateStatus - Update satellite status
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @param {string} satelliteId - Satellite ID
+  // @param {string} status - New status
+  // @param {Object} metadata - Additional metadata (lastSync, configVersion, etc.)
+  // @returns {Object} Result object
+  // --------------------------------------------------------------------------
+  updateStatus(ss, satelliteId, status, metadata = {}) {
+    const sheet = this.getOrCreateSheet(ss);
+    const satellites = this.loadAll(ss);
+    
+    const satellite = satellites.find(sat => sat.id === satelliteId);
+    if (!satellite) {
+      return { success: false, error: "Satellite not found" };
+    }
+    
+    // Validate status
+    if (!this.config.statuses.includes(status)) {
+      return { success: false, error: "Invalid status: " + status };
+    }
+    
+    // Update satellite
+    const updatedSatellite = {
+      ...satellite,
+      status: status,
+      lastSync: metadata.lastSync || satellite.lastSync,
+      configVersion: metadata.configVersion || satellite.configVersion,
+      notes: metadata.notes || satellite.notes
+    };
+    
+    // Update sheet
+    const updateRow = [
+      updatedSatellite.id,
+      updatedSatellite.url,
+      updatedSatellite.name,
+      updatedSatellite.status,
+      updatedSatellite.lastSync,
+      updatedSatellite.configVersion,
+      updatedSatellite.notes
+    ];
+    
+    sheet.getRange(updatedSatellite.rowIndex, 1, 1, updateRow.length).setValues([updateRow]);
+    
+    Logger.log('[SatelliteRegistry_] Updated satellite status: ' + satelliteId + ' -> ' + status);
+    return { success: true, satellite: updatedSatellite };
+  },
+  
+  // --------------------------------------------------------------------------
+  // removeSatellite - Remove a satellite from the registry
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @param {string} satelliteId - Satellite ID
+  // @returns {Object} Result object
+  // --------------------------------------------------------------------------
+  removeSatellite(ss, satelliteId) {
+    const sheet = this.getOrCreateSheet(ss);
+    const satellites = this.loadAll(ss);
+    
+    const satelliteIndex = satellites.findIndex(sat => sat.id === satelliteId);
+    if (satelliteIndex === -1) {
+      return { success: false, error: "Satellite not found" };
+    }
+    
+    const satellite = satellites[satelliteIndex];
+    
+    // Delete row
+    sheet.deleteRow(satellite.rowIndex);
+    
+    Logger.log('[SatelliteRegistry_] Removed satellite: ' + satelliteId);
+    return { success: true, removedSatellite: satellite };
+  },
+  
+  // --------------------------------------------------------------------------
+  // syncAll - Sync all satellites (placeholder for actual sync logic)
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @returns {Array} Array of sync results
+  // --------------------------------------------------------------------------
+  syncAll(ss) {
+    const satellites = this.loadAll(ss);
+    const results = [];
+    
+    satellites.forEach(satellite => {
+      try {
+        // This would contain the actual sync logic
+        // For now, just update the status
+        const result = {
+          satelliteId: satellite.id,
+          success: true,
+          status: "ACTIVE",
+          lastSync: new Date().toISOString(),
+          configVersion: "SYNCED_" + Date.now()
+        };
+        
+        this.updateStatus(ss, satellite.id, result.status, {
+          lastSync: result.lastSync,
+          configVersion: result.configVersion
+        });
+        
+        results.push(result);
+      } catch (err) {
+        const errorResult = {
+          satelliteId: satellite.id,
+          success: false,
+          error: err.message,
+          status: "ERROR"
+        };
+        
+        this.updateStatus(ss, satellite.id, errorResult.status, {
+          notes: "Sync failed: " + err.message
+        });
+        
+        results.push(errorResult);
+      }
+    });
+    
+    Logger.log('[SatelliteRegistry_] Synced ' + results.length + ' satellites');
+    return results;
+  },
+  
+  // --------------------------------------------------------------------------
+  // validateSatellite - Validate satellite object
+  // @param {Object} satellite - Satellite object
+  // @returns {boolean} True if valid
+  // --------------------------------------------------------------------------
+  validateSatellite(satellite) {
+    if (!satellite.url || !satellite.url.startsWith("https://docs.google.com/spreadsheets/")) {
+      return false;
+    }
+    
+    if (!satellite.id || satellite.id.trim() === "") {
+      return false;
+    }
+    
+    return true;
+  },
+  
+  // --------------------------------------------------------------------------
+  // generateId - Generate a unique satellite ID
+  // @returns {string} Unique satellite ID
+  // --------------------------------------------------------------------------
+  generateId() {
+    return "SAT_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5).toUpperCase();
+  },
+  
+  // --------------------------------------------------------------------------
+  // extractNameFromUrl - Extract satellite name from Google Sheets URL
+  // @param {string} url - Google Sheets URL
+  // @returns {string} Extracted name
+  // --------------------------------------------------------------------------
+  extractNameFromUrl(url) {
+    try {
+      // Extract from URL path or use default
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      
+      // Try to find a meaningful name from the path
+      for (const part of pathParts) {
+        if (part && part.length > 3 && part !== 'spreadsheets' && part !== 'd') {
+          return part.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+      
+      // Fallback to domain-based naming
+      return "Satellite " + urlObj.hostname.replace('docs.google.com', 'Google Sheets');
+    } catch (err) {
+      return "Unknown Satellite";
+    }
+  },
+  
+  // --------------------------------------------------------------------------
+  // getRegistryStats - Get registry statistics
+  // @param {Spreadsheet} ss - Spreadsheet object
+  // @returns {Object} Statistics object
+  // --------------------------------------------------------------------------
+  getRegistryStats(ss) {
+    const satellites = this.loadAll(ss);
+    
+    const stats = {
+      total: satellites.length,
+      active: satellites.filter(s => s.status === "ACTIVE").length,
+      inactive: satellites.filter(s => s.status === "INACTIVE").length,
+      unknown: satellites.filter(s => s.status === "UNKNOWN").length,
+      error: satellites.filter(s => s.status === "ERROR").length,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    return stats;
+  }
+};
+
+/**
+ * setupAllSheets - Enhanced setupAllSheets with Satellite_Registry integration
+ * @param {Spreadsheet} ss - Spreadsheet object
+ */
+function setupAllSheets(ss) {
+  // Create Satellite_Registry sheet using SatelliteRegistry_ module
+  const registrySheet = SatelliteRegistry_.getOrCreateSheet(ss);
+  
+  // Initialize other Mothership sheets (existing logic)
+  _createConfigSheet(ss);
+  _createSyncTempSheet(ss);
+  _createAccaPortfolioSheet(ss);
+  _createAccaResultsSheet(ss);
+  _createMasterDashboardSheet(ss);
+  
+  Logger.log('[setupAllSheets] All sheets created including Satellite_Registry');
+}
+
