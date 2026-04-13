@@ -529,7 +529,9 @@ function _cfg_() {
  * ========================= */
 
 // Markets your MIC "Type" should represent
-const _KNOWN_MARKETS_ = new Set(['MAIN','OU','Q_SPREAD','SPREAD','ML','TOTALS']);
+if (typeof _KNOWN_MARKETS_ === 'undefined') {
+  const _KNOWN_MARKETS_ = new Set(['MAIN','OU','Q_SPREAD','SPREAD','ML','TOTALS']);
+}
 
 function _micBetType_(bet) {
   // Your feed: Market = MAIN / OU / Q_SPREAD
