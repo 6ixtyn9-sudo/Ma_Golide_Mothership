@@ -2,7 +2,9 @@
 /* =========================
  * DEFAULT CONFIG (can be overridden at runtime)
  * ========================= */
-const MIC_WEEK_TEST_MODE = true; // set false after satellites fixed
+if (typeof MIC_WEEK_TEST_MODE === 'undefined') {
+  var MIC_WEEK_TEST_MODE = true; // set false after satellites fixed
+}
 const MIC_DEFAULTS = {
   SHEETS: {
     BETS_ARCHIVE: 'Historical_Bets_Archive',
