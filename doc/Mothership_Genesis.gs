@@ -1936,7 +1936,7 @@ function _createAnalysisSheets(ss) {
   discoverySheet.clear();
 
   const discoveryHeaders = [['discovery_id', 'league', 'team', 'opponent', 'edge_type', 'edge_value', 'confidence', 'timestamp']];
-  discoverySheet.getRange('A1:G1').setValues(discoveryHeaders)
+  discoverySheet.getRange('A1:H1').setValues(discoveryHeaders)
     .setFontWeight('bold')
     .setBackground('#ff9900')
     .setFontColor('#ffffff');
