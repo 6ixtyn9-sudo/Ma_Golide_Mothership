@@ -126,8 +126,8 @@ function _createConfigSheet(ss) {
 
   // Add example rows
   sheet.getRange('A2:H4').setValues([
-    ['NBA_2025', 'NBA', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', ''],
-    ['EURO_2025', 'Euroleague', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', ''],
+    ['NBA_2025', 'NBA', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', '', ''],
+    ['EURO_2025', 'Euroleague', 'https://your-satellite-url-here', 'Basketball', 'Active', '4', '', ''],
     ['', '', '', '', '', '', '', '']
   ]);
 
