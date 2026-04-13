@@ -2,7 +2,8 @@
 /* =========================
  * DEFAULT CONFIG (can be overridden at runtime)
  * ========================= */
-const MIC_DEFAULTS = {
+if (typeof MIC_DEFAULTS === 'undefined') {
+  const MIC_DEFAULTS = {
   SHEETS: {
     BETS_ARCHIVE: 'Historical_Bets_Archive',
     RESULTS_ARCHIVE: 'Historical_Results_Archive',
@@ -63,6 +64,7 @@ const MIC_DEFAULTS = {
     CANDIDATE_CAUTION_MEAN: [0.54,0.55,0.56]
   }
 };
+}
 
 
 
