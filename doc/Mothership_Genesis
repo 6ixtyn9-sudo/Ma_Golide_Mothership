@@ -1096,3 +1096,248 @@ function _resetDashboardSilent(ss) {
   sheet.getRange(2, 1, kpiData.length, 2).setValues(kpiData);
 }
 
+// ============================================================================
+// PHASE 3 PATCH 5 + 5B: CONFIG HARDENING - MOTHERSHIP INTEGRATION
+// ============================================================================
+
+/**
+ * ConfigManager_Mothership - Mothership configuration management
+ * Integrates with Satellite Config Managers for centralized control
+ */
+const ConfigManager_Mothership = {
+  
+  // --------------------------------------------------------------------------
+  // loadMothershipConfig - Load Mothership configuration from satellite configs
+  // --------------------------------------------------------------------------
+  loadMothershipConfig() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = {
+      version: "MOTHERSHIP-3.0",
+      lastUpdated: new Date().toISOString(),
+      satellites: [],
+      globalSettings: {}
+    };
+    
+    // Load satellite registry
+    try {
+      const registrySheet = ss.getSheetByName("Satellite_Registry");
+      if (registrySheet) {
+        const registryData = registrySheet.getDataRange().getValues();
+        for (let i = 1; i < registryData.length; i++) {
+          const row = registryData[i];
+          if (row[1]) { // URL in column B
+            const satellite = {
+              id: row[0] || 'SAT_' + i,
+              url: row[1],
+              name: row[2] || 'Unknown Satellite',
+              status: row[3] || 'UNKNOWN',
+              lastSync: row[4] || null,
+              configVersion: row[5] || null
+            };
+            config.satellites.push(satellite);
+          }
+        }
+      }
+    } catch (err) {
+      Logger.log('[ConfigManager_Mothership] Registry load failed: ' + err.message);
+    }
+    
+    // Load global settings from Config sheet
+    try {
+      const configSheet = ss.getSheetByName("Config");
+      if (configSheet) {
+        const configData = configSheet.getDataRange().getValues();
+        for (let i = 1; i < configData.length; i++) {
+          const row = configData[i];
+          if (row[0]) { // setting_key
+            config.globalSettings[String(row[0]).trim()] = this.parseConfigValue(row[1]);
+          }
+        }
+      }
+    } catch (err) {
+      Logger.log('[ConfigManager_Mothership] Config load failed: ' + err.message);
+    }
+    
+    return config;
+  },
+  
+  // --------------------------------------------------------------------------
+  // parseConfigValue - Parse configuration value (same as Assayer)
+  // --------------------------------------------------------------------------
+  parseConfigValue(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+    
+    const str = String(value).trim();
+    
+    // Boolean values
+    if (str.toLowerCase() === "true") return true;
+    if (str.toLowerCase() === "false") return false;
+    
+    // JSON values
+    if (str.startsWith("[") || str.startsWith("{")) {
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        Logger.log('[ConfigManager_Mothership] Failed to parse JSON value: ' + str);
+        return str;
+      }
+    }
+    
+    // Numeric values
+    const num = parseFloat(str);
+    if (!isNaN(num)) {
+      return num;
+    }
+    
+    // String values
+    return str;
+  },
+  
+  // --------------------------------------------------------------------------
+  // validateMothershipConfig - Validate Mothership configuration
+  // --------------------------------------------------------------------------
+  validateMothershipConfig(config) {
+    try {
+      // Check required fields
+      if (!config.version || !config.satellites) {
+        Logger.log('[ConfigManager_Mothership] Missing required fields');
+        return false;
+      }
+      
+      // Validate satellite URLs
+      for (const satellite of config.satellites) {
+        if (!satellite.url || !satellite.url.startsWith('https://docs.google.com/spreadsheets/')) {
+          Logger.log('[ConfigManager_Mothership] Invalid satellite URL: ' + satellite.url);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (err) {
+      Logger.log('[ConfigManager_Mothership] Config validation failed: ' + err.message);
+      return false;
+    }
+  }
+};
+
+/**
+ * validateConfigState_ - Mothership wrapper for config validation
+ * @param {Object} config - Configuration object
+ * @param {string} tier - Configuration tier
+ * @returns {boolean} True if valid
+ */
+function validateConfigState_(config, tier) {
+  if (typeof ConfigManager_Mothership !== 'undefined') {
+    return ConfigManager_Mothership.validateMothershipConfig(config);
+  }
+  
+  // Fallback validation
+  return config && config.version && config.satellites;
+}
+
+/**
+ * runGenesis - Enhanced genesis with Phase 3 config hardening
+ * Creates Satellite_Registry sheet and initializes config management
+ */
+function runGenesis() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Create Satellite_Registry sheet
+    _createSatelliteRegistrySheet(ss);
+    
+    // Initialize configuration management
+    const config = ConfigManager_Mothership.loadMothershipConfig();
+    
+    // Validate configuration
+    if (ConfigManager_Mothership.validateMothershipConfig(config)) {
+      ui.alert(
+        'Genesis Complete',
+        'Mothership initialized with:\n\n' +
+        ' Satellite_Registry sheet created\n' +
+        ' Configuration management enabled\n' +
+        ' ' + config.satellites.length + ' satellites registered\n\n' +
+        'You can now paste satellite URLs in column B of Satellite_Registry.',
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert(
+        'Genesis Warning',
+        'Mothership initialized but configuration validation failed.\n' +
+        'Please check the Satellite_Registry sheet.',
+        ui.ButtonSet.OK
+      );
+    }
+    
+  } catch (err) {
+    ui.alert(
+      'Genesis Error',
+      'Failed to initialize Mothership:\n\n' + err.message,
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * _createSatelliteRegistrySheet - Create safe Satellite_Registry sheet
+ * @param {Spreadsheet} ss - Spreadsheet object
+ */
+function _createSatelliteRegistrySheet(ss) {
+  let sheet = ss.getSheetByName("Satellite_Registry");
+  if (!sheet) {
+    sheet = ss.insertSheet("Satellite_Registry");
+  }
+  
+  // Clear existing content
+  sheet.clear();
+  
+  // Create headers
+  const headers = [
+    "satellite_id",
+    "spreadsheet_url", 
+    "satellite_name",
+    "status",
+    "last_sync",
+    "config_version",
+    "notes"
+  ];
+  
+  sheet.getRange(1, 1, 1, headers.length)
+    .setValues([headers])
+    .setFontWeight("bold")
+    .setBackground("#1a1a2e")
+    .setFontColor("#FFD700");
+  
+  sheet.setFrozenRows(1);
+  
+  // Set column widths
+  sheet.setColumnWidth(1, 120);  // satellite_id
+  sheet.setColumnWidth(2, 400);  // spreadsheet_url (main column for pasting URLs)
+  sheet.setColumnWidth(3, 150);  // satellite_name
+  sheet.setColumnWidth(4, 100);  // status
+  sheet.setColumnWidth(5, 150);  // last_sync
+  sheet.setColumnWidth(6, 120);  // config_version
+  sheet.setColumnWidth(7, 200);  // notes
+  
+  // Add sample data
+  const sampleData = [
+    ["SAT_001", "https://docs.google.com/spreadsheets/d/...", "Sample Satellite 1", "UNKNOWN", null, null, "Paste satellite URL in column B"],
+    ["SAT_002", "https://docs.google.com/spreadsheets/d/...", "Sample Satellite 2", "UNKNOWN", null, null, "Replace with actual satellite URLs"]
+  ];
+  
+  sheet.getRange(2, 1, sampleData.length, headers.length).setValues(sampleData);
+  
+  // Add instructions
+  sheet.getRange(sampleData.length + 3, 1, 3, 2)
+    .merge()
+    .setValue("INSTRUCTIONS: Paste satellite spreadsheet URLs in column B. The system will automatically sync configuration from these satellites.")
+    .setFontWeight("bold")
+    .setBackground("#e8f5e8")
+    .setWrap(true);
+  
+  Logger.log('[_createSatelliteRegistrySheet] Satellite_Registry sheet created');
+}
+
