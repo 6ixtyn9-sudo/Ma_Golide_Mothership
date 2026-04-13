@@ -2,9 +2,6 @@
 /* =========================
  * DEFAULT CONFIG (can be overridden at runtime)
  * ========================= */
-if (typeof MIC_WEEK_TEST_MODE === 'undefined') {
-  var MIC_WEEK_TEST_MODE = true; // set false after satellites fixed
-}
 const MIC_DEFAULTS = {
   SHEETS: {
     BETS_ARCHIVE: 'Historical_Bets_Archive',
@@ -4472,7 +4469,7 @@ function calculateBayesParamsWithDecay_(validBets, cfg) {
     let act = act0;
 
     if (!act || act === 'NA') {
-      if (MIC_WEEK_TEST_MODE && _shouldDefaultNAForebetToWith_(b)) {
+      if (_shouldDefaultNAForebetToWith_(b)) {
         act = 'WITH'; // safe fallback only for comparable HOME/AWAY-ish markets
       } else {
         continue; // do NOT poison arms with totals / non-comparable bets
@@ -5131,7 +5128,7 @@ function _applyForebetModeConsistency_(policy, bet) {
 
   // Week-test: tolerate missing ForebetAction
   if (!betAct || betAct === 'NA') {
-    if (MIC_WEEK_TEST_MODE) {
+    if (false) {
       policy.reason += ' | ForebetAction missing (week-test: tolerated)';
       return policy;
     }
@@ -6835,7 +6832,7 @@ function runShadowBacktest(options) {
     // C: normalize ForebetAction — mirrors live week-test behavior
     let betAct = String(row.ForebetAction || 'NA').toUpperCase().trim();
     if ((!betAct || betAct === 'NA')
-        && typeof MIC_WEEK_TEST_MODE !== 'undefined' && MIC_WEEK_TEST_MODE
+        && false
         && typeof _shouldDefaultNAForebetToWith_ === 'function'
         && _shouldDefaultNAForebetToWith_(row)) {
       betAct = 'WITH';
