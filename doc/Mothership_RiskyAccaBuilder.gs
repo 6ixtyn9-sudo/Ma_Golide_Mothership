@@ -816,9 +816,9 @@ function _enrichRiskyBetsWithStrategy(bets) {
 
   var bestPurityFor = function(query, purityRowsList) {
     var qLeague  = normLeague(query.league);
-    var qSource  = String(query.source || '').trim();
+    var qSource  = String(query.source || 'FLEET').trim().toUpperCase();
     var qQuarter = String(query.quarter || 'All').trim();
-    var qGender  = String(query.gender || 'All').trim();
+    var qGender  = String(query.gender || 'All').trim().toUpperCase();
     var qTier    = String(query.tier || 'UNKNOWN').trim();
 
     var best = null;
@@ -1330,7 +1330,9 @@ function _enrichRiskyBetsWithStrategy(bets) {
           direction:     null,
           conf_bucket:   null, // ignored by Fleet matcher
           spread_bucket: null,
-          line_bucket:   null
+          line_bucket:   null,
+          cfgKey:        ctx?.cfgKey,
+          cfgBucket:     ctx?.cfgBucket
         };
       };
 

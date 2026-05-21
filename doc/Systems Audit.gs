@@ -74,7 +74,7 @@ const SYS_CONTRACT = {
   // ── Enum constraints for type validation ──
   VALID_GRADES:       ["PLATINUM","GOLD","SILVER","BRONZE","ROCK","CHARCOAL"],
   VALID_SAMPLE_SIZES: ["Small","Medium","Large"],
-  VALID_SOURCES:      ["Fleet","Other"],
+  VALID_SOURCES:      ["FLEET", "Fleet", "Other"],
   VALID_QUARTERS_EDGE:   ["Q1","Q2","Q3","Q4"],          // edges use Q-prefix
   VALID_QUARTERS_LEAGUE: ["All","Full","Q1","Q2","Q3","Q4"], // purity uses All/Full/Q-prefix
   VALID_SIDES:        ["H","A"],
@@ -1020,11 +1020,8 @@ function assayerChecks_(ctx) {
   const names = new Set(sheetInfos.map(s => s.name));
 
   // Check that source data sheets exist
-  if (names.has("Side"))   add("OK","integration","assayer_source_side","Side sheet present");
-  else add("WARN","integration","assayer_source_side","Side sheet missing — edges may be incomplete");
-
-  if (names.has("Totals")) add("OK","integration","assayer_source_totals","Totals sheet present");
-  else add("WARN","integration","assayer_source_totals","Totals sheet missing — edges may be incomplete");
+  if (names.has("FLEET"))   add("OK","integration","assayer_source_fleet","FLEET sheet present");
+  else add("WARN","integration","assayer_source_fleet","FLEET sheet missing — edges may be incomplete");
 
   // Check that Fleet rows exist in ASSAYER_EDGES
   var edgeSh = ss.getSheetByName(contract.EDGE_SHEET_NAME);

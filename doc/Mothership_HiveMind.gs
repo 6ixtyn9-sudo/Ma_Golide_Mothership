@@ -1690,7 +1690,8 @@ function syncAllResults() {
  */
 function syncEverything() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ui = SpreadsheetApp.getUi();
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
   
   ss.toast('🔄 Syncing bets and results...', 'Hive Mind', 5);
   
@@ -1717,13 +1718,19 @@ function syncEverything() {
     const betCount = syncSheet && syncSheet.getLastRow() > 1 ? syncSheet.getLastRow() - 1 : 0;
     const gameCount = resultsSheet && resultsSheet.getLastRow() > 1 ? resultsSheet.getLastRow() - 1 : 0;
     
-    ui.alert('Full Sync Complete', 
-      `✅ Synced ${betCount} bets\n✅ Synced ${gameCount} games\n\nDashboard updated.`, 
-      ui.ButtonSet.OK);
+    if (ui) {
+      ui.alert('Full Sync Complete', 
+        `✅ Synced ${betCount} bets\n✅ Synced ${gameCount} games\n\nDashboard updated.`, 
+        ui.ButtonSet.OK);
+    } else {
+      Logger.log(`[HiveMind] Full Sync Complete: Synced ${betCount} bets, ${gameCount} games.`);
+    }
     
   } catch (e) {
     Logger.log(`[HiveMind] FATAL: ${e.message}\n${e.stack}`);
-    ui.alert('❌ Sync Error', e.message, ui.ButtonSet.OK);
+    if (ui) {
+      ui.alert('❌ Sync Error', e.message, ui.ButtonSet.OK);
+    }
   }
 }
 

@@ -878,9 +878,9 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
 
   const bestPurityFor = (query, purityRows) => {
     const qLeague = normLeague(query.league);
-    const qSource = String(query.source || '').trim();
+    const qSource = String(query.source || 'FLEET').trim().toUpperCase();
     const qQuarter = String(query.quarter || 'All').trim();
-    const qGender = String(query.gender || 'All').trim();
+    const qGender = String(query.gender || 'All').trim().toUpperCase();
     const qTier = String(query.tier || 'UNKNOWN').trim();
 
     let best = null;
@@ -985,7 +985,7 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
     const purityRows = assayer?.purity || assayer?.ASSAYER_LEAGUE_PURITY || assayer?.assayerPurity || null;
 
     const league = ctx?.league;
-    const source = String(ctx?.source || 'Side');
+    const source = String(ctx?.source || 'FLEET').toUpperCase();
     const confDec = isFinite(ctx?.confidenceDec) ? ctx.confidenceDec : normalizeConfidenceDec(data?.confidence);
 
     if (assayer && league && (edges || purityRows)) {
@@ -1013,6 +1013,8 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
           confBucket: null, // ignored by Fleet matcher
           spreadBucket: null,
           lineBucket: null,
+          cfgKey: ctx?.cfgKey,
+          cfgBucket: ctx?.cfgBucket
         }, edges || []);
         if (!m) continue;
         if (!bestEdge || m.specificity > bestEdge.specificity ||

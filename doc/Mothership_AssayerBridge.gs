@@ -161,6 +161,31 @@ const ASSAYER_GRADE_RANK = {
 
 
 /* ═══════════════════════════════════════════
+   CONFIG PROFILE HELPERS (Assayer Port)
+   ═══════════════════════════════════════════ */
+
+function _bridgeSafeParseJSON_(s) {
+  if (!s || typeof s !== 'string') return null;
+  s = s.trim();
+  if (!s.startsWith('{') && !s.startsWith('[')) return null;
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+
+function _bridgeNormalizeConfigVal_(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  var s = String(raw).trim().toUpperCase();
+  return s || null;
+}
+
+function _bridgeFlattenConfigProfile_(obj) {
+  if (!obj || typeof obj !== 'object') return {};
+  var out = {};
+  if (obj.cfgKey) out.cfgKey = _bridgeNormalizeConfigVal_(obj.cfgKey);
+  if (obj.cfgBucket) out.cfgBucket = _bridgeNormalizeConfigVal_(obj.cfgBucket);
+  return out;
+}
+
+/* ═══════════════════════════════════════════
    SHARED UTILITIES
    ═══════════════════════════════════════════ */
 
@@ -175,8 +200,6 @@ function assayerCanonSource_(v) {
   if (!s) return null;
   if (s === "SIDE" || s === "SIDES" || s === "SPREAD" || s === "SPREADS") return "SIDE";
   if (s === "TOTAL" || s === "TOTALS" || s === "OU" || s === "O/U") return "TOTALS";
-  if (s === "HIGHQUARTER" || s === "HIGH_QTR" || s === "HIGHQTR" ||
-      s === "HIGHESTQTR" || s === "HIGHESTQUARTER") return "HIGHQUARTER";
   if (s === "FLEET") return "FLEET";
   return s;
 }
@@ -1420,30 +1443,19 @@ function assayerBetMatchesEdge_(dims, edge) {
   if (edge.source && dims.source && edge.source !== dims.source) return false;
 
   if (edge.source === 'FLEET') {
-    // Fleet edges match exclusively on criteria type + cfgKey + cfgBucket
     var crit = edge.criteria || {};
-    if (crit.type      != null && dims.typeKey   !== crit.type)      return false;
-    if (crit.cfgKey    != null && dims.cfgKey    !== crit.cfgKey)    return false;
-    if (crit.cfgBucket != null && dims.cfgBucket !== crit.cfgBucket) return false;
+    // First attempt exact match on cfgKey + cfgBucket if both are != null on the edge
+    if (crit.cfgKey != null || crit.cfgBucket != null) {
+      if (crit.cfgKey != null && dims.cfgKey !== crit.cfgKey) return false;
+      if (crit.cfgBucket != null && dims.cfgBucket !== crit.cfgBucket) return false;
+    }
+    // Fallback: match on criteria.type === dims.typeKey
+    if (crit.type != null && dims.typeKey !== crit.type) return false;
     return true;
   }
 
-  // Legacy SIDE / TOTALS match logic
-  if (edge.quarter       != null && dims.quarter       !== edge.quarter)       return false;
-  if (edge.is_women      != null && dims.isWomen       !== edge.is_women)      return false;
-  if (edge.tier          != null && dims.tier          !== edge.tier)          return false;
-  if (edge.side          != null && dims.side          !== edge.side)          return false;
-  if (edge.direction     != null && dims.direction     !== edge.direction)     return false;
-  if (edge.conf_bucket   != null && dims.conf_bucket   !== edge.conf_bucket)   return false;
-  if (edge.spread_bucket != null && dims.spread_bucket !== edge.spread_bucket) return false;
-  if (edge.line_bucket   != null && dims.line_bucket   !== edge.line_bucket)   return false;
-
-  // ◄◄ PATCH: strict market boundary enforcement
-  // If edge declares type_key, bet MUST match exactly.
-  // If edge has null type_key, it applies to all market types (wildcard).
-  if (edge.type_key != null && dims.typeKey !== edge.type_key) return false;
-
-  return true;
+  // Legacy SIDE / TOTALS logic removed (Mothership assumes Fleet-only)
+  return false;
 }
 
 /**
@@ -1451,22 +1463,10 @@ function assayerBetMatchesEdge_(dims, edge) {
  * ◄◄ PATCH: includes type_key so correct-market edges win tie-breaks.
  */
 function assayerEdgeSpecificity_(edge) {
-  let n = 0;
-  const keys = [
-    "quarter",
-    "is_women",
-    "tier",
-    "side",
-    "direction",
-    "conf_bucket",
-    "spread_bucket",
-    "line_bucket",
-    "type_key"                                              // ◄◄ PATCH
-  ];
-  for (const k of keys) if (edge && edge[k] != null) n++;
-  
-  // ◄◄ PATCH: Fleet edges store specificity inside criteria
-  if (edge && edge.source === 'FLEET' && edge.criteria) {
+  var n = 0;
+  if (!edge) return n;
+
+  if (edge.source === 'FLEET' && edge.criteria) {
     if (edge.criteria.type != null) n++;
     if (edge.criteria.cfgKey != null) n++;
     if (edge.criteria.cfgBucket != null) n++;
@@ -1954,38 +1954,18 @@ function assayerDeriveBetDims_(bet) {
   if (!isFinite(confidence)) confidence = null;
   var conf_bucket = (confidence == null) ? null : computeConfidenceBucket_(confidence);
 
-  var source = assayerCanonSource_(assayerDeriveBetSource_(bet));
+  var source = "FLEET";
 
   var direction = null, line = null, line_bucket = null;
   var side = null, spread = null, spread_bucket = null;
   var typeKey = typeU;
-  var cfgKey = null, cfgBucket = null;
+  var cfgKey = undefined, cfgBucket = undefined;
 
-  if (source === "FLEET") {
-    var flatCfg = _assayerGetCfgFlat_(bet);
-    var keys = Object.keys(flatCfg);
-    var thresholdKeys = [];
-    for (var i = 0; i < keys.length; i++) {
-      if (_assayerIsThresholdKey_(keys[i])) thresholdKeys.push(keys[i]);
-    }
-    // We just take the first threshold key since we match multiple fleet edges independently
-    // TODO(Fleet): If/when Fleet edges become dense, iterate over ALL threshold keys
-    // here and inside the matching cascade to find the best possible edge match across the set.
-    if (thresholdKeys.length > 0) {
-      cfgKey = thresholdKeys[0];
-      cfgBucket = _assayerBucketCfgValue_(cfgKey, flatCfg[cfgKey]);
-    }
-  } else if (source === "TOTALS") {
-    var totalsInfo = assayerParseTotalsPick_(pick);        // ◄◄ uses cleaned pick
-    if (totalsInfo) {
-      direction   = assayerCanonDirection_(totalsInfo.direction);
-      line        = totalsInfo.line;
-      line_bucket = computeLineBucket_(line);
-    }
-  } else if (source === "SIDE") {
-    spread        = assayerParseSpreadFromText_(pick);     // ◄◄ uses cleaned pick
-    spread_bucket = (spread != null) ? computeSpreadBucket_(spread) : null;
-    side          = assayerCanonSide_(assayerInferSideFromPickMatch_(pick, match)); // ◄◄ cleaned
+  // Flatten config profile if available
+  if (bet && bet.Config_Profile) {
+    var flatCfg = _bridgeFlattenConfigProfile_(_bridgeSafeParseJSON_(bet.Config_Profile));
+    if (flatCfg.cfgKey) cfgKey = flatCfg.cfgKey;
+    if (flatCfg.cfgBucket) cfgBucket = flatCfg.cfgBucket;
   }
 
   var tierPurity = "UNKNOWN";
@@ -1996,76 +1976,6 @@ function assayerDeriveBetDims_(bet) {
 
   tierPurity = assayerCanonTier_(tierPurity) || "UNKNOWN";
   var tierEdge = (tierPurity === "UNKNOWN") ? null : tierPurity;
-
-  // ◄◄ PATCH START: derive strict typeKey (market discriminator) ─────────────
-  //
-  // Must match ASSAYER_EDGES type_key values exactly:
-  //   SNIPER_HIGH_QTR, SNIPER_MARGIN, SNIPER_OU_STAR, SNIPER_OU_DIR, SNIPER_OU
-  //
-  // Detection order: most specific first within each source.
-  // Includes ★☆ symbol detection and structural direction+line fallback.
-  // null typeKey = only edges with null type_key can match (safe default).
-
-  var typeKey = null;
-
-  // ── 1. High Quarter (filtered upstream, classified here for safety) ──
-  //    Uses CLEANED typeU/pickU (no glyphs needed for this detection)
-  var isHighQtr =
-    typeU.includes("HIGH QTR") ||
-    typeU.includes("HIGHQTR") ||
-    typeU.includes("HIGH_QTR") ||
-    typeU.includes("HIGHEST SCORING QUARTER") ||
-    pickU.includes("HIGHEST SCORING QUARTER");
-
-  // ── 2. STAR detection ──
-  //    ◄◄ FIX: Checks CLEANED typeU for word "STAR",
-  //            but checks RAW typeOrig/pickOrig for ★☆ symbols.
-  //            These symbols are semantic (not decorative) and were
-  //            intentionally NOT stripped by _dimsSafeClean.
-  //            If _stripGlyphsForDims was used instead (which strips everything),
-  //            the raw originals still have them.
-  var isStar =
-    typeU.includes("STAR") ||
-    /[★☆]/.test(typeOrig) ||                              // ◄◄ FIX: raw original
-    /[★☆]/.test(pickOrig);                                // ◄◄ FIX: raw original
-
-  // ── 3. DIR detection (word boundary + legacy includes) ──
-  //    Uses CLEANED typeU/pick (glyphs won't false-match)
-  var isDir =
-    /\bDIR\b/.test(typeU) ||
-    typeU.includes("SNIPER DIR") ||
-    typeU.includes("DIRECTION") ||
-    typeU.includes("DIRECTIONAL") ||
-    /Q[1-4]\s*(OVER|UNDER)\s*[\d.]+/i.test(pick);         // ◄◄ FIX: cleaned pick
-
-  // ── 4. Generic O/U detection ──
-  //    Uses CLEANED typeU
-  var isOU =
-    typeU.includes("O/U") ||
-    /\bOU\b/.test(typeU) ||
-    typeU.includes("OVER/UNDER");
-
-  if (source === "FLEET") {
-    // Fleet edges use exact market types as typeKeys
-    typeKey = typeU;
-  } else if (isHighQtr) {
-    typeKey = "SNIPER_HIGH_QTR";
-  } else if (source === "SIDE") {
-    typeKey = "SNIPER_MARGIN";
-  } else if (source === "TOTALS") {
-    // STAR must be checked before DIR: "SNIPER O/U STAR" contains no "DIR"
-    if (isStar)       typeKey = "SNIPER_OU_STAR";
-    else if (isDir)   typeKey = "SNIPER_OU_DIR";
-    else if (isOU)    typeKey = "SNIPER_OU";
-    else {
-      // Structural fallback: if pick parsed into direction+line, it's directional
-      if (direction != null && line != null) typeKey = "SNIPER_OU_DIR";
-      else typeKey = null;
-    }
-  } else {
-    // Unknown/other source: null → only null-type_key edges can match
-    typeKey = null;
-  }
 
   // ◄◄ PATCH END ─────────────────────────────────────────────────────────────
 
