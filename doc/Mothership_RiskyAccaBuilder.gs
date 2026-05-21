@@ -830,8 +830,8 @@ function _enrichRiskyBetsWithStrategy(bets) {
       var lg = normLeague(r.league || r.League);
       if (!lg || lg !== qLeague) continue;
 
-      var src = String(r.source || r.Source || '').trim();
-      if (qSource && src && src !== qSource) continue;
+      var src = String(r.source || r.Source || '').trim().toUpperCase();
+      if (qSource && src && src !== String(qSource).toUpperCase()) continue;
 
       var quarter = String(r.quarter || r.Quarter || '').trim();
       var gender  = String(r.gender || r.Gender || '').trim();
@@ -1114,7 +1114,7 @@ function _enrichRiskyBetsWithStrategy(bets) {
     var ctx = assayer ? {
       assayer:       assayer,
       league:        bLeague,
-      source:        'Side',
+      source:        'FLEET',
       pickSide:      null,
       quarter:       'Full',
       gender:        'All',
@@ -1489,7 +1489,7 @@ function _enrichRiskyBetsWithStrategy(bets) {
       // ── Purity check ──
       var purityRow = bestPurityFor({
         league:  league,
-        source:  'Side',
+        source:  'FLEET',
         quarter: 'Full',
         gender:  'All',
         tier:    tier0

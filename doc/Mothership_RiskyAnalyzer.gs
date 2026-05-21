@@ -301,7 +301,7 @@ function _runAnalysis(options) {
             netRtgDiff: _safeParseFloat(gameRow[netRtgDiffCol])
           };
           
-          const ctx = assayer ? { assayer, league: leagueName, source: 'Side', pickSide: null, quarter: 'Full', gender: 'All' } : null;
+          const ctx = assayer ? { assayer, league: leagueName, source: 'FLEET', pickSide: null, quarter: 'Full', gender: 'All' } : null;
           const { riskinessScore, breakdown } = _calculateCalibratedRiskinessScore(riskinessData, ctx);
           
           scoreDistribution.push(riskinessScore);
