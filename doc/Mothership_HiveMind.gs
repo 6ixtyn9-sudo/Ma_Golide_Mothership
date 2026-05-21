@@ -121,7 +121,7 @@ function createHeaderMapWithAliases(headerRow) {
     'ev': ['ev', 'expected value', 'expectedvalue', 'value'],
     'match': ['match', 'game', 'matchup', 'teams'],
     'pick': ['pick', 'selection', 'bet', 'prediction', 'selection_text'],
-    'type': ['type', 'bet type', 'bettype', 'category'],
+    'type': ['type', 'bet type', 'bettype', 'category', 'market'],
     'odds': ['odds', 'price', 'decimal odds'],
     'league': ['league', 'competition', 'tournament', 'league id'],
     'league name': ['league name', 'leaguename', 'name'],
@@ -2136,8 +2136,10 @@ function _syncBetsSilent(ss) {
       let headerRowIndex = -1;
       for (let scanRow = 0; scanRow < Math.min(20, betData.length); scanRow++) {
         const rowStrings = betData[scanRow].map(cell => String(cell || '').toLowerCase().trim());
-        if ((rowStrings.includes('match') || rowStrings.includes('game')) && 
-            (rowStrings.includes('pick') || rowStrings.includes('type'))) {
+        const hasMatch = rowStrings.includes('match') || rowStrings.includes('game');
+        const hasHomeAway = rowStrings.includes('home') && rowStrings.includes('away');
+        if ((hasMatch || hasHomeAway) && 
+            (rowStrings.includes('pick') || rowStrings.includes('type') || rowStrings.includes('selection'))) {
           headerRowIndex = scanRow;
           break;
         }
@@ -2147,7 +2149,9 @@ function _syncBetsSilent(ss) {
       
       const betHeaderMap = createHeaderMapWithAliases(betData[headerRowIndex]);
       const matchCol = betHeaderMap['match'];
-      if (matchCol === undefined) continue;
+      const homeCol  = betHeaderMap['home'];
+      const awayCol  = betHeaderMap['away'];
+      if (matchCol === undefined && (homeCol === undefined || awayCol === undefined)) continue;
       
       const pickCol = betHeaderMap['pick'];
       const dateCol = betHeaderMap['date'];
@@ -2166,8 +2170,14 @@ function _syncBetsSilent(ss) {
       
       for (let i = headerRowIndex + 1; i < betData.length; i++) {
         const betRow = betData[i];
-        const matchStr = String(betRow[matchCol] || '').trim();
-        
+        let matchStr = '';
+        if (matchCol !== undefined) {
+          matchStr = String(betRow[matchCol] || '').trim();
+        } else if (homeCol !== undefined && awayCol !== undefined) {
+          const h = String(betRow[homeCol] || '').trim();
+          const a = String(betRow[awayCol] || '').trim();
+          matchStr = (h && a) ? (h + ' vs ' + a) : '';
+        }
         if (!matchStr || matchStr.includes('━') || matchStr.toLowerCase() === 'match') continue;
         if (matchStr.toLowerCase().includes('summary') || matchStr.toLowerCase().includes('total')) continue;
         if (matchStr.toLowerCase().includes('no bankers') || matchStr.toLowerCase().includes('no snipers')) continue;

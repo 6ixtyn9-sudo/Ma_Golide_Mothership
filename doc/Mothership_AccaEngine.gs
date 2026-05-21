@@ -6411,9 +6411,9 @@ function _loadBetsFromSyncTemp(ss) {
     var dateRaw = getCell(row, colIdx.date);
     var timeRaw = getCell(row, colIdx.time);
 
-    var typeRaw = (colIdx.market >= 0) ? String(getCell(row, colIdx.market) || '').trim() : '';
-    if (!typeRaw && colIdx.type >= 0) {
-      typeRaw = String(getCell(row, colIdx.type) || '').trim();
+    var typeRaw = (colIdx.type >= 0) ? String(getCell(row, colIdx.type) || '').trim() : '';
+    if (!typeRaw && colIdx.market >= 0) {
+      typeRaw = String(getCell(row, colIdx.market) || '').trim();
     }
     var type = typeRaw || 'UNKNOWN';
 
