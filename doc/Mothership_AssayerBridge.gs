@@ -1874,22 +1874,7 @@ function assayerDeriveBetSource_(bet) {
   var type = typeRaw.toUpperCase();
   var pick = pickRaw.toUpperCase();
 
-  // ── 1. HighQuarter detection (most specific — check first) ──
-  if (
-    pick.includes("HIGHEST SCORING QUARTER") ||
-    pick.includes("HIGHEST QUARTER") ||
-    pick.includes("HIGH SCORING QUARTER") ||
-    pick.includes("HIGH QTR") ||
-    type.includes("HIGH QTR") ||
-    type.includes("HIGHEST QTR") ||
-    type.includes("HIGHQTR") ||
-    /\bHIGH(EST)?\s*(SCORING\s*)?Q(UARTER|TR)\b/.test(pick) ||
-    /\bHIGH(EST)?\s*(SCORING\s*)?Q(UARTER|TR)\b/.test(type)
-  ) {
-    return "HIGHQUARTER";
-  }
-
-  // ── 2. Default: FLEET ──
+  // ── 1. Default: FLEET ──
   // All INTAKE__ sheets in Assayer generate Fleet edges.
   return "FLEET";
 }
@@ -2060,12 +2045,13 @@ function assayerDeriveBetDims_(bet) {
     /\bOU\b/.test(typeU) ||
     typeU.includes("OVER/UNDER");
 
-  if (isHighQtr) {
+  if (source === "FLEET") {
+    // Fleet edges use exact market types as typeKeys
+    typeKey = typeU;
+  } else if (isHighQtr) {
     typeKey = "SNIPER_HIGH_QTR";
-
   } else if (source === "SIDE") {
     typeKey = "SNIPER_MARGIN";
-
   } else if (source === "TOTALS") {
     // STAR must be checked before DIR: "SNIPER O/U STAR" contains no "DIR"
     if (isStar)       typeKey = "SNIPER_OU_STAR";
@@ -2076,7 +2062,6 @@ function assayerDeriveBetDims_(bet) {
       if (direction != null && line != null) typeKey = "SNIPER_OU_DIR";
       else typeKey = null;
     }
-
   } else {
     // Unknown/other source: null → only null-type_key edges can match
     typeKey = null;
