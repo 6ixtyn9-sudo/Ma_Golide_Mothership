@@ -6339,6 +6339,8 @@ function _loadBetsFromSyncTemp(ss) {
     match:         headers.indexOf('match'),
     pick:          headers.indexOf('pick'),
     type:          headers.indexOf('type'),
+    market:        headers.indexOf('market'),
+    tier:          headers.indexOf('risktier'),
     odds:          headers.indexOf('odds'),
     confidence:    headers.findIndex(function(h) { return h.includes('conf'); }),
     ev:            headers.indexOf('ev'),
@@ -6409,10 +6411,13 @@ function _loadBetsFromSyncTemp(ss) {
     var dateRaw = getCell(row, colIdx.date);
     var timeRaw = getCell(row, colIdx.time);
 
-    var typeRaw = (colIdx.type >= 0)
-      ? String(getCell(row, colIdx.type) || '').trim()
-      : '';
+    var typeRaw = (colIdx.market >= 0) ? String(getCell(row, colIdx.market) || '').trim() : '';
+    if (!typeRaw && colIdx.type >= 0) {
+      typeRaw = String(getCell(row, colIdx.type) || '').trim();
+    }
     var type = typeRaw || 'UNKNOWN';
+
+    var tier = (colIdx.tier >= 0) ? String(getCell(row, colIdx.tier) || '').trim() : '';
 
     if (type.toUpperCase().startsWith('RISKY_')) {
       type = type.replace(/^RISKY_/i, '').trim() || 'UNKNOWN';

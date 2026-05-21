@@ -1985,10 +1985,14 @@ function assayerDeriveBetDims_(bet) {
   }
 
   var tierPurity = "UNKNOWN";
-  if (typeU.includes("TIER1") || typeU.includes("BANKER") || typeU.includes("WIN"))
-    tierPurity = "STRONG";
-  else if (typeU.includes("TIER2") || typeU.includes("SNIPER") || typeU.includes("QUARTER"))
-    tierPurity = "MEDIUM";
+  if (bet && bet.tier) {
+    tierPurity = String(bet.tier);
+  } else {
+    if (typeU.includes("TIER1") || typeU.includes("BANKER") || typeU.includes("WIN"))
+      tierPurity = "STRONG";
+    else if (typeU.includes("TIER2") || typeU.includes("SNIPER") || typeU.includes("QUARTER"))
+      tierPurity = "MEDIUM";
+  }
 
   tierPurity = assayerCanonTier_(tierPurity) || "UNKNOWN";
   var tierEdge = (tierPurity === "UNKNOWN") ? null : tierPurity;
