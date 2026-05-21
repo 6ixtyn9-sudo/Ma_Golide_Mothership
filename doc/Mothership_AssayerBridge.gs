@@ -1442,20 +1442,25 @@ function assayerBetMatchesEdge_(dims, edge) {
 
   if (edge.source && dims.source && edge.source !== dims.source) return false;
 
-  if (edge.source === 'FLEET') {
-    var crit = edge.criteria || {};
-    // First attempt exact match on cfgKey + cfgBucket if both are != null on the edge
-    if (crit.cfgKey != null || crit.cfgBucket != null) {
-      if (crit.cfgKey != null && dims.cfgKey !== crit.cfgKey) return false;
-      if (crit.cfgBucket != null && dims.cfgBucket !== crit.cfgBucket) return false;
-    }
-    // Fallback: match on criteria.type === dims.typeKey
-    if (crit.type != null && dims.typeKey !== crit.type) return false;
-    return true;
-  }
+  // Match flat dimensions for ALL edges (including FLEET)
+  if (edge.quarter       != null && dims.quarter       !== edge.quarter)       return false;
+  if (edge.is_women      != null && dims.isWomen       !== edge.is_women)      return false;
+  if (edge.tier          != null && dims.tier          !== edge.tier)          return false;
+  if (edge.side          != null && dims.side          !== edge.side)          return false;
+  if (edge.direction     != null && dims.direction     !== edge.direction)     return false;
+  if (edge.conf_bucket   != null && dims.conf_bucket   !== edge.conf_bucket)   return false;
+  if (edge.spread_bucket != null && dims.spread_bucket !== edge.spread_bucket) return false;
+  if (edge.line_bucket   != null && dims.line_bucket   !== edge.line_bucket)   return false;
 
-  // Legacy SIDE / TOTALS logic removed (Mothership assumes Fleet-only)
-  return false;
+  // Exact type match enforcement
+  if (edge.type_key != null && dims.typeKey !== edge.type_key) return false;
+
+  // If edge has cfgKey or cfgBucket stored in filters_json, match those too
+  // (Currently, Assayer doesn't output cfgKey as columns, but we future-proof this)
+  if (edge.cfgKey != null && dims.cfgKey !== edge.cfgKey) return false;
+  if (edge.cfgBucket != null && dims.cfgBucket !== edge.cfgBucket) return false;
+
+  return true;
 }
 
 /**
@@ -1466,10 +1471,21 @@ function assayerEdgeSpecificity_(edge) {
   var n = 0;
   if (!edge) return n;
 
-  if (edge.source === 'FLEET' && edge.criteria) {
-    if (edge.criteria.type != null) n++;
-    if (edge.criteria.cfgKey != null) n++;
-    if (edge.criteria.cfgBucket != null) n++;
+  var keys = [
+    "quarter",
+    "is_women",
+    "tier",
+    "side",
+    "direction",
+    "conf_bucket",
+    "spread_bucket",
+    "line_bucket",
+    "type_key",
+    "cfgKey",
+    "cfgBucket"
+  ];
+  for (var i = 0; i < keys.length; i++) {
+    if (edge[keys[i]] != null) n++;
   }
 
   return n;
@@ -2159,7 +2175,7 @@ function assayerNormalizeEdgeRow_(r) {
     return (n !== null && Number.isInteger(n)) ? n : null;
   };
 
-  return {
+  var out = {
     edge_id:       norm(r.edge_id),
     source:        assayerCanonSource_(r.source),
     pattern:       norm(r.pattern),
@@ -2177,6 +2193,8 @@ function assayerNormalizeEdgeRow_(r) {
     type_key:      upperOrNull(r.type_key),                // ◄◄ PATCH
 
     filters_json:  norm(r.filters_json),
+    cfgKey:        null,
+    cfgBucket:     null,
 
     n:             intOrNull(r.n),
     wins:          intOrNull(r.wins),
@@ -2191,6 +2209,18 @@ function assayerNormalizeEdgeRow_(r) {
     reliable:      assayerBoolOrNull_(r.reliable),
     sample_size:   norm(r.sample_size),
   };
+
+  if (out.filters_json) {
+    try {
+      var parsed = JSON.parse(out.filters_json);
+      if (parsed.cfgKey != null) out.cfgKey = String(parsed.cfgKey);
+      if (parsed.cfgBucket != null) out.cfgBucket = String(parsed.cfgBucket);
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  return out;
 }
 
 function assayerNormalizePurityRow_(r) {
