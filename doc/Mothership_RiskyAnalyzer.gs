@@ -783,6 +783,15 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
     const edgeSource = String(edgeField(edge, 'source', 'source') || '').trim();
     if (edgeSource && String(bet.source || '').trim() !== edgeSource) return false;
 
+    // ◄◄ PATCH: Fleet edges match exclusively on criteria
+    if (edgeSource === 'FLEET') {
+      const crit = edge.criteria || {};
+      if (crit.type      != null && bet.typeKey   !== crit.type)      return false;
+      if (crit.cfgKey    != null && bet.cfgKey    !== crit.cfgKey)    return false;
+      if (crit.cfgBucket != null && bet.cfgBucket !== crit.cfgBucket) return false;
+      return true;
+    }
+
     const checks = [
       ['quarter', 'quarter', 'quarter'],
       ['isWomen', 'is_women', 'isWomen'],
@@ -809,6 +818,15 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
     // also check camelCase just in case
     const camelKeys = ['quarter','isWomen','tier','side','direction','confBucket','spreadBucket','lineBucket'];
     for (const k of camelKeys) if (!isBlank(edge?.[k])) n = Math.max(n, n); // no-op, kept intentionally minimal
+    
+    // ◄◄ PATCH: Fleet edges store specificity inside criteria
+    const edgeSource = String(edgeField(edge, 'source', 'source') || '').trim();
+    if (edgeSource === 'FLEET' && edge?.criteria) {
+      if (edge.criteria.type != null) n++;
+      if (edge.criteria.cfgKey != null) n++;
+      if (edge.criteria.cfgBucket != null) n++;
+    }
+    
     return n;
   };
 
@@ -984,9 +1002,10 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
       let bestEdge = null;
 
       for (const ps of pickSides) {
-        const bet = {
+        // ◄◄ PATCH: Cascade FLEET -> SIDE
+        let m = bestEdgeForBet({
           league,
-          source,
+          source: 'FLEET',
           side: ps,
           quarter: null,
           isWomen: null,
@@ -995,8 +1014,22 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
           confBucket,
           spreadBucket: null,
           lineBucket: null,
-        };
-        const m = bestEdgeForBet(bet, edges || []);
+        }, edges || []);
+
+        if (!m) {
+          m = bestEdgeForBet({
+            league,
+            source: 'Side',
+            side: ps,
+            quarter: null,
+            isWomen: null,
+            tier,
+            direction: null,
+            confBucket,
+            spreadBucket: null,
+            lineBucket: null,
+          }, edges || []);
+        }
         if (!m) continue;
         if (!bestEdge || m.specificity > bestEdge.specificity ||
             (m.specificity === bestEdge.specificity && m.gradeRank > bestEdge.gradeRank) ||

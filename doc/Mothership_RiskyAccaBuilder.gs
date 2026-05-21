@@ -1333,6 +1333,22 @@ function _enrichRiskyBetsWithStrategy(bets) {
         };
       };
 
+      // ◄◄ PATCH: Fleet dimension builder
+      var buildFleetDims = function(pred) {
+        return {
+          league:        normLeague(league),
+          source:        'FLEET',
+          quarter:       null,
+          isWomen:       null,
+          tier:          tier0,
+          side:          pred === 1 ? 'H' : 'A',
+          direction:     null,
+          conf_bucket:   confBucket0,
+          spread_bucket: null,
+          line_bucket:   null
+        };
+      };
+
       var bestEdgeForDims = function(dims) {
         var edge = null;
         if (typeof assayerMatchBetToBestEdge_ === 'function') {
@@ -1371,11 +1387,15 @@ function _enrichRiskyBetsWithStrategy(bets) {
         };
       };
 
+      // ◄◄ PATCH: Cascade from FLEET -> SIDE
+      var bestWithFleet = bestEdgeForDims(buildFleetDims(withPred));
       withSupport    = edgeToSupport(
-        bestEdgeForDims(buildSideDims(withPred))
+        bestWithFleet ? bestWithFleet : bestEdgeForDims(buildSideDims(withPred))
       );
+
+      var bestAgainstFleet = bestEdgeForDims(buildFleetDims(againstPred));
       againstSupport = edgeToSupport(
-        bestEdgeForDims(buildSideDims(againstPred))
+        bestAgainstFleet ? bestAgainstFleet : bestEdgeForDims(buildSideDims(againstPred))
       );
 
       var withRank    = withSupport    ? withSupport.gradeRank    : 0;

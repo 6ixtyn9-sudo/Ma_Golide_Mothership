@@ -177,6 +177,7 @@ function assayerCanonSource_(v) {
   if (s === "TOTAL" || s === "TOTALS" || s === "OU" || s === "O/U") return "TOTALS";
   if (s === "HIGHQUARTER" || s === "HIGH_QTR" || s === "HIGHQTR" ||
       s === "HIGHESTQTR" || s === "HIGHESTQUARTER") return "HIGHQUARTER";
+  if (s === "FLEET") return "FLEET";
   return s;
 }
 
@@ -1171,7 +1172,7 @@ function assayerEnrichBet_(bet, assayerData) {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // BRANCH B: Unsupported source → neutral pass-through
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  var SUPPORTED_SOURCES = ['SIDE', 'TOTALS'];
+  var SUPPORTED_SOURCES = ['SIDE', 'TOTALS', 'FLEET'];
   if (SUPPORTED_SOURCES.indexOf(dims.source) < 0) {
 
     var unsupEvidence = 'Unsupported source "' + dims.source + '" — neutral pass-through';
@@ -1418,6 +1419,16 @@ function assayerBetMatchesEdge_(dims, edge) {
 
   if (edge.source && dims.source && edge.source !== dims.source) return false;
 
+  if (edge.source === 'FLEET') {
+    // Fleet edges match exclusively on criteria type + cfgKey + cfgBucket
+    var crit = edge.criteria || {};
+    if (crit.type      != null && dims.typeKey   !== crit.type)      return false;
+    if (crit.cfgKey    != null && dims.cfgKey    !== crit.cfgKey)    return false;
+    if (crit.cfgBucket != null && dims.cfgBucket !== crit.cfgBucket) return false;
+    return true;
+  }
+
+  // Legacy SIDE / TOTALS match logic
   if (edge.quarter       != null && dims.quarter       !== edge.quarter)       return false;
   if (edge.is_women      != null && dims.isWomen       !== edge.is_women)      return false;
   if (edge.tier          != null && dims.tier          !== edge.tier)          return false;
@@ -1453,6 +1464,14 @@ function assayerEdgeSpecificity_(edge) {
     "type_key"                                              // ◄◄ PATCH
   ];
   for (const k of keys) if (edge && edge[k] != null) n++;
+  
+  // ◄◄ PATCH: Fleet edges store specificity inside criteria
+  if (edge && edge.source === 'FLEET' && edge.criteria) {
+    if (edge.criteria.type != null) n++;
+    if (edge.criteria.cfgKey != null) n++;
+    if (edge.criteria.cfgBucket != null) n++;
+  }
+
   return n;
 }
 
@@ -1728,6 +1747,102 @@ function assayerDerivePurityAction_(purityRow) {
  *            cleaned = "Q1: H +5.5"
  *            → clean pattern matching, correct SIDE classification
  */
+
+// ---------------------------------------------------------------------------
+// Config-profile helpers (v5.0.0 Fleet support)
+// ---------------------------------------------------------------------------
+function _assayerSafeParseJSON_(s) {
+  if (!s || typeof s !== 'string') return {};
+  var t = s.trim();
+  if (!t || t === '{}') return {};
+  try { return JSON.parse(t); } catch (_) { return {}; }
+}
+
+function _assayerNormalizeConfigVal_(raw) {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  var s = String(raw).trim();
+  if (!s) return undefined;
+  var u = s.toUpperCase();
+  if (u === 'TRUE')  return true;
+  if (u === 'FALSE') return false;
+  if (/^\d+(\.\d+)?%$/.test(s)) { var p = parseFloat(s); return isFinite(p) ? p / 100 : s; }
+  var n = Number(s);
+  if (!isNaN(n) && isFinite(n)) return n;
+  return s;
+}
+
+function _assayerFlattenConfigProfile_(obj) {
+  if (!obj || typeof obj !== 'object') return {};
+  var out = {};
+  var sheets = Object.keys(obj);
+  for (var si = 0; si < sheets.length; si++) {
+    var sheet = sheets[si];
+    var props  = obj[sheet];
+    if (!props || typeof props !== 'object') continue;
+    var pkeys = Object.keys(props);
+    for (var pi = 0; pi < pkeys.length; pi++) {
+      var normKey = String(pkeys[pi]).trim().replace(/\s+/g, ' ');
+      if (!normKey) continue;
+      out[sheet + '.' + normKey] = _assayerNormalizeConfigVal_(props[pkeys[pi]]);
+    }
+  }
+  return out;
+}
+
+function _assayerIsThresholdKey_(keyPath) {
+  return /min|max|threshold|\bev\b|expected.value|confidence|edge|tolerance/i.test(keyPath);
+}
+
+function _assayerBucketCfgValue_(keyPath, val) {
+  if (val === undefined || val === null) return 'MISSING';
+  if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+
+  if (/confidence/i.test(keyPath)) {
+    var c = typeof val === 'number' ? val : parseFloat(val);
+    if (!isFinite(c)) return 'MISSING';
+    if (c > 1 && c <= 100) c = c / 100;
+    // For Mothership fallback, we don't have Config_.confBuckets easily available
+    // but Assayer uses default buckets:
+    if (c < 0.55) return '<55%';
+    if (c < 0.60) return '55-60%';
+    if (c < 0.65) return '60-65%';
+    if (c < 0.70) return '65-70%';
+    return '>=70%';
+  }
+
+  if (/\bev\b|expected.value/i.test(keyPath)) {
+    var ev = typeof val === 'number' ? val : parseFloat(val);
+    if (!isFinite(ev)) return 'MISSING';
+    if (ev < 0)  return '<0';
+    if (ev < 2)  return '0-2';
+    if (ev < 5)  return '2-5';
+    if (ev < 10) return '5-10';
+    return '>=10';
+  }
+
+  var nv = typeof val === 'number' ? val : Number(val);
+  if (!isNaN(nv) && isFinite(nv)) {
+    if (nv <= 0)  return '<=0';
+    if (nv <= 1)  return '0-1';
+    if (nv <= 2)  return '1-2';
+    if (nv <= 5)  return '2-5';
+    if (nv <= 10) return '5-10';
+    return '>=10';
+  }
+
+  return String(val).trim().slice(0, 30) || 'MISSING';
+}
+
+function _assayerGetCfgFlat_(bet) {
+  if (!bet._cfgFlat) {
+    bet._cfgFlat = _assayerFlattenConfigProfile_(
+      _assayerSafeParseJSON_((bet && bet.config_profile) ? bet.config_profile : '{}')
+    );
+  }
+  return bet._cfgFlat;
+}
+
+// ---------------------------------------------------------------------------
 function assayerDeriveBetSource_(bet) {
 
   // ── ◄◄ FIX: Inline cleaner (self-sufficient if _stripGlyphsForDims not called) ──
@@ -1774,7 +1889,23 @@ function assayerDeriveBetSource_(bet) {
     return "HIGHQUARTER";
   }
 
-  // ── 2. Totals detection ──
+  // ── 2. Fleet detection (if config_profile is present and parseable) ──
+  if (bet && bet.config_profile) {
+    var flatCfg = _assayerGetCfgFlat_(bet);
+    var keys = Object.keys(flatCfg);
+    var hasThreshold = false;
+    for (var i = 0; i < keys.length; i++) {
+      if (_assayerIsThresholdKey_(keys[i])) {
+        hasThreshold = true;
+        break;
+      }
+    }
+    if (hasThreshold) {
+      return "FLEET";
+    }
+  }
+
+  // ── 3. Totals detection ──
   if (
     /\b(OVER|UNDER)\b/.test(pick) ||
     type.includes("O/U") ||
@@ -1784,7 +1915,7 @@ function assayerDeriveBetSource_(bet) {
     return "TOTALS";
   }
 
-  // ── 3. Default: Side ──
+  // ── 4. Default: Side ──
   return "SIDE";
 }
 
@@ -1867,8 +1998,22 @@ function assayerDeriveBetDims_(bet) {
 
   var direction = null, line = null, line_bucket = null;
   var side = null, spread = null, spread_bucket = null;
+  var typeKey = typeU;
+  var cfgKey = null, cfgBucket = null;
 
-  if (source === "TOTALS") {
+  if (source === "FLEET") {
+    var flatCfg = _assayerGetCfgFlat_(bet);
+    var keys = Object.keys(flatCfg);
+    var thresholdKeys = [];
+    for (var i = 0; i < keys.length; i++) {
+      if (_assayerIsThresholdKey_(keys[i])) thresholdKeys.push(keys[i]);
+    }
+    // We just take the first threshold key since we match multiple fleet edges independently
+    if (thresholdKeys.length > 0) {
+      cfgKey = thresholdKeys[0];
+      cfgBucket = _assayerBucketCfgValue_(cfgKey, flatCfg[cfgKey]);
+    }
+  } else if (source === "TOTALS") {
     var totalsInfo = assayerParseTotalsPick_(pick);        // ◄◄ uses cleaned pick
     if (totalsInfo) {
       direction   = assayerCanonDirection_(totalsInfo.direction);
@@ -1979,7 +2124,9 @@ function assayerDeriveBetDims_(bet) {
     spread_bucket: assayerCanonBucket_(spread_bucket),
     line:          line,
     line_bucket:   assayerCanonBucket_(line_bucket),
-    typeKey:       typeKey                                  // ◄◄ PATCH
+    typeKey:       typeKey,                                 // ◄◄ PATCH
+    cfgKey:        cfgKey,
+    cfgBucket:     cfgBucket
   };
 }
 
