@@ -2009,6 +2009,8 @@ function assayerDeriveBetDims_(bet) {
       if (_assayerIsThresholdKey_(keys[i])) thresholdKeys.push(keys[i]);
     }
     // We just take the first threshold key since we match multiple fleet edges independently
+    // TODO(Fleet): If/when Fleet edges become dense, iterate over ALL threshold keys
+    // here and inside the matching cascade to find the best possible edge match across the set.
     if (thresholdKeys.length > 0) {
       cfgKey = thresholdKeys[0];
       cfgBucket = _assayerBucketCfgValue_(cfgKey, flatCfg[cfgKey]);

@@ -1340,10 +1340,10 @@ function _enrichRiskyBetsWithStrategy(bets) {
           source:        'FLEET',
           quarter:       null,
           isWomen:       null,
-          tier:          tier0,
-          side:          pred === 1 ? 'H' : 'A',
+          tier:          null, // ignored by Fleet matcher
+          side:          null, // ignored by Fleet matcher
           direction:     null,
-          conf_bucket:   confBucket0,
+          conf_bucket:   null, // ignored by Fleet matcher
           spread_bucket: null,
           line_bucket:   null
         };
