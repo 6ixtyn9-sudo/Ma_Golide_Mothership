@@ -720,9 +720,13 @@ function syncAllLeagues() {
     if (out.length > 0) {
       syncSheet.getRange(2, 1, out.length, headers.length).setValues(out);
       try {
+        const edgeScoreCol = headers.indexOf('Edge Score') + 1;
+        const sourceRowCol = headers.indexOf('SourceRow') + 1;
+        if (edgeScoreCol > 0) syncSheet.getRange(2, edgeScoreCol, out.length, 1).setNumberFormat('0');
+        if (sourceRowCol > 0) syncSheet.getRange(2, sourceRowCol, out.length, 1).setNumberFormat('0');
         syncSheet.autoResizeColumns(1, headers.length);
       } catch (e) {
-        Logger.log('[FINALIZE] autoResizeColumns failed (non-fatal): ' + e.message);
+        Logger.log('[FINALIZE] formatting/autoResizeColumns failed (non-fatal): ' + e.message);
       }
     }
 
