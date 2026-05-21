@@ -475,6 +475,7 @@ function syncAllLeagues() {
 
           if (matchStr.includes('━') || matchStr.includes('---') || matchStr.includes('===') ||
               matchStr.toLowerCase() === 'match' || matchStr.toLowerCase() === 'game' ||
+              matchStr.toLowerCase() === 'home vs away' ||
               matchStr.toLowerCase().includes('no bankers') ||
               matchStr.toLowerCase().includes('no snipers') ||
               matchStr.toLowerCase().includes('matching criteria')) {
@@ -482,7 +483,9 @@ function syncAllLeagues() {
           }
 
           const pick = String(betRow[pickCol] || '').trim();
-          if (!pick) { skippedRows++; continue; }
+          if (!pick || pick.toLowerCase() === 'selection_text' || pick.toLowerCase() === 'pick') {
+            skippedRows++; continue;
+          }
 
           const rowLeague = leagueCol !== undefined ? String(betRow[leagueCol] || '').trim() : '';
           const league = rowLeague || leagueName || leagueId;
