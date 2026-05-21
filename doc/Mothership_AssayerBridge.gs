@@ -1889,34 +1889,9 @@ function assayerDeriveBetSource_(bet) {
     return "HIGHQUARTER";
   }
 
-  // ── 2. Fleet detection (if config_profile is present and parseable) ──
-  if (bet && bet.config_profile) {
-    var flatCfg = _assayerGetCfgFlat_(bet);
-    var keys = Object.keys(flatCfg);
-    var hasThreshold = false;
-    for (var i = 0; i < keys.length; i++) {
-      if (_assayerIsThresholdKey_(keys[i])) {
-        hasThreshold = true;
-        break;
-      }
-    }
-    if (hasThreshold) {
-      return "FLEET";
-    }
-  }
-
-  // ── 3. Totals detection ──
-  if (
-    /\b(OVER|UNDER)\b/.test(pick) ||
-    type.includes("O/U") ||
-    /\bOU\b/.test(type) ||
-    pick.includes("TOTAL")
-  ) {
-    return "TOTALS";
-  }
-
-  // ── 4. Default: Side ──
-  return "SIDE";
+  // ── 2. Default: FLEET ──
+  // All INTAKE__ sheets in Assayer generate Fleet edges.
+  return "FLEET";
 }
 
 /* ═══════════════════════════════════════════

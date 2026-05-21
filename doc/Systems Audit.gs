@@ -74,7 +74,7 @@ const SYS_CONTRACT = {
   // ── Enum constraints for type validation ──
   VALID_GRADES:       ["PLATINUM","GOLD","SILVER","BRONZE","ROCK","CHARCOAL"],
   VALID_SAMPLE_SIZES: ["Small","Medium","Large"],
-  VALID_SOURCES:      ["Side","Totals","Fleet"],
+  VALID_SOURCES:      ["Fleet","Other"],
   VALID_QUARTERS_EDGE:   ["Q1","Q2","Q3","Q4"],          // edges use Q-prefix
   VALID_QUARTERS_LEAGUE: ["All","Full","Q1","Q2","Q3","Q4"], // purity uses All/Full/Q-prefix
   VALID_SIDES:        ["H","A"],
@@ -355,8 +355,6 @@ function inferRoleFromFingerprints_(sheetInfos) {
   let legacyEdgeHit      = false;
 
   let maCount        = 0;
-  let hasSide        = names.has("Side");
-  let hasTotals      = names.has("Totals");
   let hasRawH2H      = false;
   let hasAccaPort    = names.has("Acca_Portfolio");
   let hasUpName      = names.has(SYS_CONTRACT.UPCOMING_SHEET_NAME);
@@ -416,8 +414,6 @@ function inferRoleFromFingerprints_(sheetInfos) {
   if (legacyEdgeHit)     { sA += 30;  why.push("Legacy Edge_Output (needs migration)"); }
   if (maCount >= 3)      { sA += 120; why.push(`MA_* sheets (${maCount})`); }
   else if (maCount >= 1) { sA += 30;  why.push(`MA_* sheets (${maCount})`); }
-  if (hasSide)           { sA += 15;  why.push("Side"); }
-  if (hasTotals)         { sA += 15;  why.push("Totals"); }
 
   // GOLIDE signals (unchanged)
   if (hasRawH2H)         { sG += 120; why.push("RawH2H_N pattern"); }

@@ -890,8 +890,8 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
       const lg = normLeague(r.league || r.League);
       if (!lg || lg !== qLeague) continue;
 
-      const src = String(r.source || r.Source || '').trim();
-      if (qSource && src && src !== qSource) continue;
+      const src = String(r.source || r.Source || '').trim().toUpperCase();
+      if (qSource && src && src !== qSource.toUpperCase()) continue;
 
       const quarter = String(r.quarter || r.Quarter || '').trim();
       const gender = String(r.gender || r.Gender || '').trim();
@@ -1002,34 +1002,18 @@ function _calculateCalibratedRiskinessScore(data, ctx) {
       let bestEdge = null;
 
       for (const ps of pickSides) {
-        // ◄◄ PATCH: Cascade FLEET -> SIDE
         let m = bestEdgeForBet({
           league,
           source: 'FLEET',
           side: ps,
           quarter: null,
           isWomen: null,
-          tier,
+          tier: null, // ignored by Fleet matcher
           direction: null,
-          confBucket,
+          confBucket: null, // ignored by Fleet matcher
           spreadBucket: null,
           lineBucket: null,
         }, edges || []);
-
-        if (!m) {
-          m = bestEdgeForBet({
-            league,
-            source: 'Side',
-            side: ps,
-            quarter: null,
-            isWomen: null,
-            tier,
-            direction: null,
-            confBucket,
-            spreadBucket: null,
-            lineBucket: null,
-          }, edges || []);
-        }
         if (!m) continue;
         if (!bestEdge || m.specificity > bestEdge.specificity ||
             (m.specificity === bestEdge.specificity && m.gradeRank > bestEdge.gradeRank) ||
