@@ -2290,7 +2290,26 @@ function _syncResultsSilent(ss) {
       const satData = satResultsSheet.getDataRange().getValues();
       if (satData.length < 2) continue;
 
-      const satHeaders = createHeaderMapWithAliases(satData[0]);
+      let headerRowIndex = -1;
+      let firstDataRowIndex = -1;
+
+      for (let scanRow = 0; scanRow < Math.min(20, satData.length); scanRow++) {
+        const rowStrings = satData[scanRow].map(cell => String(cell || '').toLowerCase().trim());
+        const hasHome = rowStrings.includes('home') || rowStrings.includes('home team');
+        const hasAway = rowStrings.includes('away') || rowStrings.includes('away team');
+        const hasStatus = rowStrings.includes('status');
+        const hasDate = rowStrings.includes('date');
+
+        if (hasHome && hasAway && (hasStatus || hasDate)) {
+          headerRowIndex = scanRow;
+          firstDataRowIndex = scanRow + 1;
+          break;
+        }
+      }
+
+      if (headerRowIndex === -1) continue;
+
+      const satHeaders = createHeaderMapWithAliases(satData[headerRowIndex]);
       const homeCol = satHeaders['home'];
       const awayCol = satHeaders['away'];
       if (homeCol === undefined || awayCol === undefined) continue;
@@ -2311,7 +2330,7 @@ function _syncResultsSilent(ss) {
       const gameTypeCol = satHeaders['game type'];
       const otCol = satHeaders['ot'];
 
-      for (let i = 1; i < satData.length; i++) {
+      for (let i = firstDataRowIndex; i < satData.length; i++) {
         const satRow = satData[i];
         const home = String(satRow[homeCol] || '').trim();
         const away = String(satRow[awayCol] || '').trim();

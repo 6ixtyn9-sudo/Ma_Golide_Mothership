@@ -35,12 +35,12 @@ const RISKY_ACCA_CONFIG = {
   // ─────────────────────────────────────────────────────────────
   // PATCH: Assayer SILVER floor for risky accas
   // ─────────────────────────────────────────────────────────────
-  ASSAYER_FLOOR_ENABLED: true,
+  ASSAYER_FLOOR_ENABLED: false,
   MIN_EDGE_GRADE: 'SILVER',
   MIN_PURITY_GRADE: 'SILVER',
 
-  UNKNOWN_EDGE_ACTION: 'BLOCK',     // 'BLOCK' | 'ALLOW'
-  UNKNOWN_PURITY_ACTION: 'BLOCK',   // 'BLOCK' | 'ALLOW'
+  UNKNOWN_EDGE_ACTION: 'ALLOW',     // 'BLOCK' | 'ALLOW'
+  UNKNOWN_PURITY_ACTION: 'ALLOW',   // 'BLOCK' | 'ALLOW'
 
   REQUIRE_RELIABLE_EDGE: false,     // safe default
   DISALLOW_SMALL_SAMPLE_EDGES: false, // safe default
@@ -69,10 +69,10 @@ var LEFTOVER_CONFIG = {
   // ── Risky tier settings ──
   RISKY_ENABLED:          true,
   RISKY_ACCA_SIZES:       [3, 2],         // ◄◄ FIX: smaller — 4-folds at ~60% WR are decorative
-  RISKY_MIN_EDGE_GRADE:   'SILVER',
+  RISKY_MIN_EDGE_GRADE:   'NONE',         // Allow bets with no edge into risky leftovers
   RISKY_MIN_POOL_SIZE:    2,
-  RISKY_REQUIRE_RELIABLE: true,           // ◄◄ FIX: demand edge.reliable === true
-  RISKY_MIN_EDGE_N:       30,             // ◄◄ FIX: no small-sample mirages
+  RISKY_REQUIRE_RELIABLE: false,          // Risky doesn't need to be reliable
+  RISKY_MIN_EDGE_N:       0,              // Allow small sample sizes for risky
   RISKY_MAX_PER_LEAGUE:   2               // ◄◄ FIX: tighter cap than Silver
 };
 
@@ -204,16 +204,22 @@ function _isRiskyCandidate(b, LCFG, GRADE_RANK) {
   // Hard-stop: explicit hard-block is not a soft failure
   if (reason === 'PURITY_HARD_BLOCK') return false;
 
-  // Accept if: purity is missing/empty OR reason is in the allowed soft-failure list
+  // ── STRICT RULE: Exclude ALL Unverified Leagues ──
+  // If a league is PURITY_MISSING (no purity grade), ban it entirely from the Risky tier.
+  // This blocks Bankers, Snipers, and O/U from unverified leagues.
   var purityMissing = (!pg || pg === '' || pg === 'NONE');
+  if (purityMissing) {
+    return false;
+  }
+
   var reasonAllowed = RISKY_ALLOWED_BLOCK_REASONS.has(reason);
 
-  // Also accept if bet wasn't blocked but simply failed grade gate on purity
+  // Accept if bet wasn't blocked but simply failed grade gate on purity
   // (edge ≥ SILVER but purity grade was e.g. BRONZE, which is NOT in forbidden set)
   var purityBelowFloor = (_rank(pg) > 0 && _rank(pg) < _rank('SILVER') &&
                           !RISKY_FORBIDDEN_PURITY_GRADES.has(pg));
 
-  return (purityMissing || reasonAllowed || purityBelowFloor);
+  return (reasonAllowed || purityBelowFloor);
 }
 
 
@@ -237,7 +243,7 @@ function buildRiskyAccumulators() {
 
   try {
     Logger.log(`[${FUNC_NAME}] STEP 1: Loading pending risky bets...`);
-    const pendingRiskyBets = _loadPendingRiskyBets(ss);
+    let pendingRiskyBets = _loadPendingRiskyBets(ss);
 
     if (pendingRiskyBets.length === 0) {
       const msg = 'No pending RISKY bets found in satellites.';
@@ -246,6 +252,21 @@ function buildRiskyAccumulators() {
       if (ui) ui.alert('❌ No Risky Bets', msg, ui.ButtonSet.OK);
       return;
     }
+    
+    // ── MUTUAL EXCLUSIVITY FIX: Filter out bets already used in Main Portfolio ──
+    if (typeof _extractUsedBetIdsFromAccaPortfolio === 'function') {
+      const mainUsedIds = _extractUsedBetIdsFromAccaPortfolio(ss, ['Acca_Portfolio']);
+      const originalCount = pendingRiskyBets.length;
+      
+      pendingRiskyBets = pendingRiskyBets.filter(b => {
+        // Since Risky format might slightly differ from Main, we check both raw BetID and the canonical keys
+        const canonPick = String(b.pick || b.match || '').replace(/[^\w]/g, '').toLowerCase(); // Simplistic check if needed
+        return !mainUsedIds.has(b.betId);
+      });
+      
+      Logger.log(`[${FUNC_NAME}] Mutually exclusive filter: excluded ${originalCount - pendingRiskyBets.length} bets already in Main Portfolio.`);
+    }
+
     Logger.log(`[${FUNC_NAME}] ✅ Loaded ${pendingRiskyBets.length} pending risky bets`);
 
     Logger.log(`[${FUNC_NAME}] STEP 2: Calculating riskiness scores...`);

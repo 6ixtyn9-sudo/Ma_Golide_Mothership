@@ -5724,8 +5724,8 @@ function runLeftoverProcessing() {
     if (!allBets || allBets.length === 0) throw new Error('Sync_Temp has no valid bets');
     Logger.log('[' + FUNC + '] Loaded: ' + allBets.length);
 
-    var usedBetIds = _extractUsedBetIdsFromAccaPortfolio(ss);
-    Logger.log('[' + FUNC + '] Main-used: ids=' + usedBetIds.size);
+    var usedBetIds = _extractUsedBetIdsFromAccaPortfolio(ss, ['Acca_Portfolio', 'Risky_Acca_Portfolio']);
+    Logger.log('[' + FUNC + '] Main/Risky-used: ids=' + usedBetIds.size);
 
     var leagueMetrics = fetchLeagueAccuracyMetrics();
     Logger.log('[' + FUNC + '] ✅ Metrics: ' + Object.keys(leagueMetrics || {}).length);
@@ -6688,9 +6688,11 @@ function debugLeftoverSystem() {
  * When BetID column is present: uses it directly.
  * When missing: reconstructs same MD5 hash as Phase 2 enrichment from row fields.
  */
-function _extractUsedBetIdsFromAccaPortfolio(ss) {
+function _extractUsedBetIdsFromAccaPortfolio(ss, targetSheets) {
   var FUNC = '_extractUsedBetIdsFromAccaPortfolio';
-  var sheet = ss.getSheetByName('Acca_Portfolio');
+  if (!targetSheets || !Array.isArray(targetSheets)) {
+    targetSheets = ['Acca_Portfolio'];
+  }
 
   // ── Return container ──
   var usedIds      = new Set();   // raw BetID strings
@@ -6701,10 +6703,6 @@ function _extractUsedBetIdsFromAccaPortfolio(ss) {
   usedIds._keys      = canonKeys;
   usedIds._pickKeys  = canonPicks;
   usedIds._stableIds = stableIds;
-
-  if (!sheet) { Logger.log('[' + FUNC + '] Acca_Portfolio not found'); return usedIds; }
-  var data = sheet.getDataRange().getValues();
-  if (!data || data.length < 2) { Logger.log('[' + FUNC + '] empty'); return usedIds; }
 
   // ── Shared canon helpers ──
   var _up   = function(s) { return String(s || '').trim().toUpperCase(); };
@@ -6746,41 +6744,50 @@ function _extractUsedBetIdsFromAccaPortfolio(ss) {
     }
   };
 
-  // ── Find BetID column ──
-  var bidCol = -1;
-  for (var r0 = 0; r0 < Math.min(60, data.length) && bidCol < 0; r0++)
-    for (var c0 = 0; c0 < data[r0].length; c0++)
-      if (_up(data[r0][c0]) === 'BETID') { bidCol = c0; break; }
+  for (var sn = 0; sn < targetSheets.length; sn++) {
+    var sheet = ss.getSheetByName(targetSheets[sn]);
+    if (!sheet) { Logger.log('[' + FUNC + '] ' + targetSheets[sn] + ' not found'); continue; }
+    
+    var data = sheet.getDataRange().getValues();
+    if (!data || data.length < 2) { Logger.log('[' + FUNC + '] ' + targetSheets[sn] + ' empty'); continue; }
 
-  Logger.log('[' + FUNC + '] BetID col: ' +
-    (bidCol < 0 ? 'NOT FOUND' : 'col ' + (bidCol + 1)));
+    // ── Find BetID column ──
+    var bidCol = -1;
+    for (var r0 = 0; r0 < Math.min(60, data.length) && bidCol < 0; r0++) {
+      for (var c0 = 0; c0 < data[r0].length; c0++) {
+        if (_up(data[r0][c0]) === 'BETID') { bidCol = c0; break; }
+      }
+    }
 
-  // ── Scan rows  (cols: 0=Date 1=Time 2=League 3=Match 4=Pick 5=Type) ──
-  var rows = 0, fromCol = 0;
-  for (var r = 0; r < data.length; r++) {
-    var row = data[r];
-    if (!row || row.length < 6) continue;
+    Logger.log('[' + FUNC + '] ' + targetSheets[sn] + ' BetID col: ' +
+      (bidCol < 0 ? 'NOT FOUND' : 'col ' + (bidCol + 1)));
 
-    var league = String(row[2] || '').trim();
-    var match  = String(row[3] || '').trim();
-    var pick   = String(row[4] || '').trim();
-    var type   = String(row[5] || '').trim();
+    // ── Scan rows  (cols: 0=Date 1=Time 2=League 3=Match 4=Pick 5=Type) ──
+    for (var r = 0; r < data.length; r++) {
+      var row = data[r];
+      if (!row || row.length < 6) continue;
 
-    if (match.indexOf(' vs ') === -1 || !pick || pick === 'Pick') continue;
-    rows++;
+      var league = String(row[2] || '').trim();
+      var match  = String(row[3] || '').trim();
+      var pick   = String(row[4] || '').trim();
+      var type   = String(row[5] || '').trim();
 
-    var cp = _cpk(pick), ct = _ctp(type);
-    canonKeys.add([_up(league), _up(match), cp, ct].join('|'));
-    canonPicks.add([_up(league), _up(match), cp].join('|'));
+      if (match.indexOf(' vs ') === -1 || !pick || pick === 'Pick') continue;
+      rows++;
 
-    var dt = _joinDT(row[0], row[1]);
-    stableIds.add(_md5(
-      [_up(league), _up(match), cp, ct,
-       dt ? dt.toISOString() : ''].join('|')));
+      var cp = _cpk(pick), ct = _ctp(type);
+      canonKeys.add([_up(league), _up(match), cp, ct].join('|'));
+      canonPicks.add([_up(league), _up(match), cp].join('|'));
 
-    if (bidCol >= 0) {
-      var bid = String(row[bidCol] || '').trim();
-      if (bid) { usedIds.add(bid); fromCol++; }
+      var dt = _joinDT(row[0], row[1]);
+      stableIds.add(_md5(
+        [_up(league), _up(match), cp, ct,
+         dt ? dt.toISOString() : ''].join('|')));
+
+      if (bidCol >= 0) {
+        var bid = String(row[bidCol] || '').trim();
+        if (bid) { usedIds.add(bid); fromCol++; }
+      }
     }
   }
 
