@@ -847,7 +847,7 @@ function _formatDateValue(dateRaw) {
   if (typeof dateRaw === 'string') {
     const str = dateRaw.trim();
     
-    const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/);
     if (dmyMatch) {
       const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
       const month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
@@ -855,7 +855,7 @@ function _formatDateValue(dateRaw) {
       return `${day}/${month}/${year}`;
     }
     
-    const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+.*)?$/);
     if (ymdMatch) {
       const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
       const month = String(parseInt(ymdMatch[2], 10)).padStart(2, '0');
@@ -961,8 +961,30 @@ function _parseMatchString(matchStr) {
 
 function _parseTime(timeRaw, dateRaw) {
   let betDate = new Date();
+  let dateHadTime = false;
   
-  if (dateRaw) {
+  if (dateRaw instanceof Date && !isNaN(dateRaw.getTime())) {
+    betDate = new Date(dateRaw.getTime());
+    if (betDate.getHours() !== 0 || betDate.getMinutes() !== 0) dateHadTime = true;
+  } else if (typeof dateRaw === 'string' && dateRaw.trim()) {
+    const str = dateRaw.trim();
+    const nativeDate = new Date(str);
+    if (!isNaN(nativeDate.getTime()) && str.includes(':') && !str.includes('/')) {
+      betDate = new Date(nativeDate.getTime());
+      if (betDate.getHours() !== 0 || betDate.getMinutes() !== 0) dateHadTime = true;
+    } else {
+      const dateStr = _formatDateValue(dateRaw);
+      if (dateStr) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          betDate = new Date(year, month, day);
+        }
+      }
+    }
+  } else if (dateRaw) {
     const dateStr = _formatDateValue(dateRaw);
     if (dateStr) {
       const parts = dateStr.split('/');
@@ -980,7 +1002,9 @@ function _parseTime(timeRaw, dateRaw) {
   let hasTimeComponent = false;
   
   if (timeRaw === null || timeRaw === undefined || timeRaw === '') {
-    betDate.setHours(0, 0, 0, 0);
+    if (!dateHadTime) {
+      betDate.setHours(0, 0, 0, 0);
+    }
     return betDate;
   }
   
@@ -7247,11 +7271,12 @@ function processLeftoverBets(ss, allBets, usedBetIds, leagueMetrics, assayerData
   // ══════════════════════════════════════════════════
   // 8. Write sheets
   // ══════════════════════════════════════════════════
-  if (portfolios.length > 0) _writeLeftoverSheet(ss, portfolios);
-  else Logger.log('[' + FUNC + '] No leftover accas to write');
+  // Always write both sheets — clears stale data even when 0 accas built
+  _writeLeftoverSheet(ss, portfolios);
+  if (portfolios.length === 0) Logger.log('[' + FUNC + '] No leftover accas to write');
 
-  if (riskyPortfolios.length > 0) _writeRiskySheet(ss, riskyPortfolios);
-  else Logger.log('[' + FUNC + '] No risky accas to write');
+  _writeRiskySheet(ss, riskyPortfolios);
+  if (riskyPortfolios.length === 0) Logger.log('[' + FUNC + '] No risky accas to write');
 
   _writeAuditSheet(ss, audit);
 

@@ -583,8 +583,35 @@ function syncAllLeagues() {
             }
           }
 
-          const dateOut = dateRaw || tier1.date || '';
-          const timeOut = timeRaw || tier1.time || '';
+          const dateOut = dateRaw || tier1.date || upc.date || '';
+
+          // ◄◄ PATCH: multi-level time fallback
+          // 1. Direct time cell from Bet_Slips
+          // 2. time column from Tier1_Predictions
+          // 3. time column from UpcomingClean
+          // 4. Extract HH:MM from a Date object in tier1.date (Sheets datetime cell)
+          // 5. Extract HH:MM from a Date object in upc.date
+          let timeOut = timeRaw || tier1.time || upc['time'] || '';
+          if (!timeOut) {
+            const _extractTime_ = function(v) {
+              if (!v) return '';
+              if (v instanceof Date && !isNaN(v.getTime())) {
+                const h = v.getHours(), m = v.getMinutes();
+                if (h !== 0 || m !== 0) {
+                  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+                }
+              }
+              if (typeof v === 'string' && v.includes('T') && v.includes(':')) {
+                const d = new Date(v);
+                if (!isNaN(d.getTime())) {
+                  const h = d.getHours(), m = d.getMinutes();
+                  if (h !== 0 || m !== 0) return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+                }
+              }
+              return '';
+            };
+            timeOut = _extractTime_(tier1.date) || _extractTime_(upc.date) || '';
+          }
 
           const evOut = (evRaw !== '' && evRaw !== null) ? evRaw : ouEV;
           const evSource = (evRaw !== '' && evRaw !== null) ? 'Bet_Slips' : (ouEV !== '' ? 'OU_Log(EV)' : '');
@@ -1045,6 +1072,7 @@ function _loadUpcomingCleanMap_(satellite) {
   const homeCol = h['home'];
   const awayCol = h['away'];
   const dateCol = h['date'];
+  const timeCol = h['time'];  // ◄◄ PATCH: capture time
 
   const qConfCols = {
     q1: h['t2-q1-conf'],
@@ -1068,6 +1096,14 @@ function _loadUpcomingCleanMap_(satellite) {
     if (qConfCols.q2 !== undefined) map[key]['t2-q2-conf'] = row[qConfCols.q2];
     if (qConfCols.q3 !== undefined) map[key]['t2-q3-conf'] = row[qConfCols.q3];
     if (qConfCols.q4 !== undefined) map[key]['t2-q4-conf'] = row[qConfCols.q4];
+
+    // ◄◄ PATCH: store time and raw date for game-time fallback
+    if (timeCol !== undefined && row[timeCol] !== '' && row[timeCol] !== null) {
+      map[key]['time'] = row[timeCol];
+    }
+    if (dateCol !== undefined) {
+      map[key]['date'] = row[dateCol];
+    }
   }
 
   return map;

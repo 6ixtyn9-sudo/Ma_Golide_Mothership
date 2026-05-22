@@ -242,6 +242,7 @@ function buildRiskyAccumulators() {
     if (pendingRiskyBets.length === 0) {
       const msg = 'No pending RISKY bets found in satellites.';
       Logger.log(`[${FUNC_NAME}] ❌ ${msg}`);
+      _writeRiskyAccaPortfolio(ss, [], []); // Clear stale bets
       if (ui) ui.alert('❌ No Risky Bets', msg, ui.ButtonSet.OK);
       return;
     }
@@ -281,6 +282,7 @@ function buildRiskyAccumulators() {
     if (filteredBets.length < 3) {
       const msg = `Only ${filteredBets.length} actionable bets after SILVER floor. Need at least 3 for accumulator.`;
       Logger.log(`[${FUNC_NAME}] ❌ ${msg}`);
+      _writeRiskyAccaPortfolio(ss, [], enrichedBets); // Clear stale bets
       if (ui) ui.alert('❌ Not Enough Bets', msg, ui.ButtonSet.OK);
       return;
     }
@@ -2173,10 +2175,8 @@ function _buildRiskyAccaSummary(portfolios, allBets, tierCounts) {
  */
 function _writeRiskySheet(ss, portfolios) {
   var FUNC = '_writeRiskySheet';
-  if (!portfolios || portfolios.length === 0) {
-    Logger.log('[' + FUNC + '] No risky accas to write');
-    return;
-  }
+  // ◄◄ PATCH: Always clear+rewrite — never skip even when portfolios is empty
+  // (skipping left stale bets from previous runs visible)
 
   var COL_COUNT = 14;
   var DEFAULT_ODDS = (typeof LEFTOVER_CONFIG !== 'undefined' && LEFTOVER_CONFIG)
@@ -2185,9 +2185,21 @@ function _writeRiskySheet(ss, portfolios) {
 
   var sheet = ss.getSheetByName('Risky_Accas');
   if (sheet) {
-    sheet.clearContents();                              // ◄◄ FIX: preserves formatting
+    sheet.clearContents();
   } else {
     sheet = ss.insertSheet('Risky_Accas');
+  }
+
+  if (!portfolios || portfolios.length === 0) {
+    // Write a clean "nothing today" header block and exit
+    sheet.getRange(1, 1, 4, COL_COUNT).setValues([
+      ['⚠️ RISKY TIER PORTFOLIO (Risky_Accas)', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+      ['Generated: ' + new Date().toLocaleString(), '', '', '', '', '', '', '', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+      ['No risky accumulators could be built today.', '', '', '', '', '', '', '', '', '', '', '', '', '']
+    ]);
+    Logger.log('[' + FUNC + '] No risky accas to write — sheet cleared');
+    return;
   }
 
   var rows = [];

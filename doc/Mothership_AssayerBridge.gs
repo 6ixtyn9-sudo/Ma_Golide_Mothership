@@ -877,6 +877,7 @@ function assayerFormatDimsRef_(d) {
       ' qPur='    + assayerSafe_(d.quarterPurity) +
       ' isWomen=' + assayerFmtBool_(d.isWomen) +
       ' gender='  + assayerSafe_(d.gender) +
+      ' typeKey=' + assayerSafe_(d.typeKey) +
       ' tierEdge=' + assayerSafe_(d.tier) +
       ' tierPur=' + assayerSafe_(d.tierPurity) +
       ' side='    + assayerSafe_(d.side) +
@@ -1457,8 +1458,8 @@ function assayerBetMatchesEdge_(dims, edge) {
 
   // If edge has cfgKey or cfgBucket stored in filters_json, match those too
   // (Currently, Assayer doesn't output cfgKey as columns, but we future-proof this)
-  if (edge.cfgKey != null && dims.cfgKey !== edge.cfgKey) return false;
-  if (edge.cfgBucket != null && dims.cfgBucket !== edge.cfgBucket) return false;
+  if (edge.cfgKey != null && dims.cfgKey !== undefined && dims.cfgKey !== edge.cfgKey) return false;
+  if (edge.cfgBucket != null && dims.cfgBucket !== undefined && dims.cfgBucket !== edge.cfgBucket) return false;
 
   return true;
 }
@@ -1914,6 +1915,7 @@ function assayerDeriveBetSource_(bet) {
 function assayerDeriveBetDims_(bet) {
   var leagueRaw = String((bet && bet.league) || "").trim();
   var league = leagueRaw.toUpperCase();
+  if (league === "WNB") league = "WNBA";
 
   // ══════════════════════════════════════════════════
   // ◄◄ FIX: Glyph stripping — clean strings for pattern matching
@@ -2219,6 +2221,10 @@ function assayerNormalizeEdgeRow_(r) {
       var parsed = JSON.parse(out.filters_json);
       if (parsed.cfgKey != null) out.cfgKey = String(parsed.cfgKey);
       if (parsed.cfgBucket != null) out.cfgBucket = String(parsed.cfgBucket);
+      if (!out.type_key) {
+        var t = parsed.typeKey || parsed.type;
+        if (t != null) out.type_key = upperOrNull(t);
+      }
     } catch (e) {
       // Ignore parse errors
     }
