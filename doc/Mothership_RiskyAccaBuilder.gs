@@ -90,14 +90,10 @@ var RISKY_ALLOWED_BLOCK_REASONS = new Set([
 ]);
 
 /**
- * Purity grades that NEVER enter Risky — these are active "avoid" signals.
- * CHARCOAL/ROCK mean the league's historical data says "stay away".
+ * Purity grades that NEVER enter Risky.
+ * NOTE: User requested relaxing purity hard blocks, so we don't forbid these anymore.
  */
-var RISKY_FORBIDDEN_PURITY_GRADES = new Set([
-  'CHARCOAL',
-  'ROCK'
-  // Add 'BRONZE' here if BRONZE is also a hard-avoid in your world
-]);
+var RISKY_FORBIDDEN_PURITY_GRADES = new Set([]);
 
 
 /**
@@ -276,7 +272,7 @@ function buildRiskyAccumulators() {
     const actionableBets = enrichedBets.filter(b => b.recommendedAction !== 'SKIP');
 
     // Defense-in-depth: assayer_passed must be true when floor enabled
-    const filteredBets = _filterRiskyBets(actionableBets, { applyAssayerFloor: true });
+    const filteredBets = _filterRiskyBets(actionableBets, { applyAssayerFloor: false });
 
     Logger.log(`[${FUNC_NAME}] ✅ ${filteredBets.length} actionable bets (${enrichedBets.length - filteredBets.length} skipped/blocked)`);
 

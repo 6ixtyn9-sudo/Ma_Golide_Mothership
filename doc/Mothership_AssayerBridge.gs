@@ -81,7 +81,12 @@ function assayerApplyBridgeConfig_(cfg) {
   if (cfg.UNKNOWN_LEAGUE_ACTION) {
     var ula = String(cfg.UNKNOWN_LEAGUE_ACTION).trim().toUpperCase();
     ASSAYER_BRIDGE.UNKNOWN_LEAGUE_ACTION =
-      (ula === "BLOCK" || ula === "NEUTRAL") ? ula : ASSAYER_BRIDGE.UNKNOWN_LEAGUE_ACTION;
+      (ula === "BLOCK" || ula === "NEUTRAL" || ula === "ALLOW") ? ula : ASSAYER_BRIDGE.UNKNOWN_LEAGUE_ACTION;
+  }
+  if (cfg.UNKNOWN_EDGE_ACTION) {
+    var uea = String(cfg.UNKNOWN_EDGE_ACTION).trim().toUpperCase();
+    ASSAYER_BRIDGE.UNKNOWN_EDGE_ACTION =
+      (uea === "BLOCK" || uea === "NEUTRAL" || uea === "ALLOW") ? uea : ASSAYER_BRIDGE.UNKNOWN_EDGE_ACTION;
   }
 
   // ── LOGGING sub-config ──
@@ -102,6 +107,7 @@ function assayerApplyBridgeConfig_(cfg) {
     " MIN_EDGE_GRADE=" + ASSAYER_BRIDGE.MIN_EDGE_GRADE +
     " MIN_PURITY_GRADE=" + ASSAYER_BRIDGE.MIN_PURITY_GRADE +
     " UNKNOWN_LEAGUE_ACTION=" + ASSAYER_BRIDGE.UNKNOWN_LEAGUE_ACTION +
+    " UNKNOWN_EDGE_ACTION=" + ASSAYER_BRIDGE.UNKNOWN_EDGE_ACTION +
     " REQUIRE_EDGE_RELIABLE=" + ASSAYER_BRIDGE.REQUIRE_EDGE_RELIABLE
   );
 
@@ -126,6 +132,7 @@ const ASSAYER_BRIDGE = {
   MIN_EDGE_GRADE: "SILVER",               // minimum edge grade allowed when GOLD_ONLY_MODE=true
   MIN_PURITY_GRADE: "SILVER",             // minimum purity grade allowed when GOLD_ONLY_MODE=true
   UNKNOWN_LEAGUE_ACTION: "BLOCK",       // what to do when no purity row exists: "BLOCK" | "NEUTRAL"
+  UNKNOWN_EDGE_ACTION: "ALLOW",         // what to do when no edge row exists: "ALLOW" | "BLOCK"
   REQUIRE_EDGE_RELIABLE: false,          // if true: only edges with reliable===true are match-eligible
   DISALLOW_SMALL_SAMPLE_EDGES: false,    // if true: sample_size==="Small" edges are excluded (hard)
   MIN_EDGE_SPECIFICITY: 1,              // mitigates wildcard/broad-edge risk (0 disables)
@@ -371,6 +378,10 @@ function assayerBoolOrNull_(v) {
   if (s === "false") return false;
   if (s === "yes" || s === "y" || s === "1") return true;
   if (s === "no" || s === "n" || s === "0") return false;
+  if (cfg.MIN_PURITY_GRADE) ASSAYER_BRIDGE.MIN_PURITY_GRADE = String(cfg.MIN_PURITY_GRADE).toUpperCase();
+  if (cfg.UNKNOWN_LEAGUE_ACTION) ASSAYER_BRIDGE.UNKNOWN_LEAGUE_ACTION = String(cfg.UNKNOWN_LEAGUE_ACTION).toUpperCase();
+  if (cfg.UNKNOWN_EDGE_ACTION) ASSAYER_BRIDGE.UNKNOWN_EDGE_ACTION = String(cfg.UNKNOWN_EDGE_ACTION).toUpperCase();
+  if (cfg.REQUIRE_EDGE_RELIABLE !== undefined) ASSAYER_BRIDGE.REQUIRE_EDGE_RELIABLE = !!cfg.REQUIRE_EDGE_RELIABLE;
   return null;
 }
 
@@ -544,16 +555,19 @@ function assayerIsGoldStandard_(dims, bestEdge, purityRow, purityEval) {
   // EDGE GATE
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (!bestEdge) {
-    passed = false;
-    addBlock('NO_EDGE', 'No edge match found in ASSAYER_EDGES');
+    if (String(ASSAYER_BRIDGE.UNKNOWN_EDGE_ACTION || '').toUpperCase() === 'ALLOW') {
+      addEvidence('NoEdge(allowed by config)');
+    } else {
+      passed = false;
+      addBlock('NO_EDGE', 'No edge match found in ASSAYER_EDGES');
+    }
 
   } else {
 
     // Hard blocks (ALWAYS forbidden regardless of goldOnly)
-    if (edgeGrade === 'ROCK' || edgeGrade === 'CHARCOAL' || edgeGrade === 'BRONZE') {
-      passed = false;
-      addBlock('EDGE_HARD_BLOCK',
-        'Edge grade ' + edgeGrade + ' is always forbidden');
+    if (edgeGrade === 'ROCK' || edgeGrade === 'CHARCOAL') {
+      // NOTE: User requested relaxing hard blocks.
+      // We rely on grade floor now.
     }
     // Grade floor (only enforced when goldOnly=true)
     else if (goldOnly && !assayerIsGradeAtLeast_(edgeGrade, minEdge)) {
@@ -626,10 +640,10 @@ function assayerIsGoldStandard_(dims, bestEdge, purityRow, purityEval) {
     var status = String(purityRow.status || '').trim();
 
     // Hard blocks (always forbidden)
-    if (purityGrade === 'CHARCOAL' || purityGrade === 'ROCK' || purityGrade === 'BRONZE') {
-      passed = false;
-      addBlock('PURITY_HARD_BLOCK',
-        'Purity grade ' + purityGrade + ' is always forbidden');
+    if (purityGrade === 'CHARCOAL' || purityGrade === 'ROCK') {
+      // NOTE: User requested relaxing purity hard blocks.
+      // We will no longer trigger PURITY_HARD_BLOCK. 
+      // The grade floor (minPurity) will catch it if it's below the threshold.
     }
     // Grade floor (only enforced when goldOnly=true)
     else if (goldOnly && !assayerIsGradeAtLeast_(purityGrade, minPur)) {

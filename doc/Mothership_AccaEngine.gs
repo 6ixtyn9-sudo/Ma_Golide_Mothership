@@ -55,11 +55,18 @@ const ACCA_ENGINE_CONFIG = {
   VERBOSE_LOGGING: true,
 
   // ─── Assayer Grade Policy (legacy defaults for gold gate recompute path) ───
-  GOLD_ONLY_MODE: true,
-  MIN_EDGE_GRADE: 'GOLD',
-  MIN_PURITY_GRADE: 'GOLD',
-  UNKNOWN_LEAGUE_ACTION: 'BLOCK',
-  REQUIRE_RELIABLE_EDGE: true
+  GOLD_ONLY_MODE: false,
+  MIN_EDGE_GRADE: 'SILVER',
+  MIN_PURITY_GRADE: 'SILVER',
+  UNKNOWN_LEAGUE_ACTION: 'ALLOW',
+  UNKNOWN_EDGE_ACTION: 'ALLOW',
+  REQUIRE_RELIABLE_EDGE: false,
+
+  LOGGING: {
+    ENABLED: true,
+    LOG_ACCEPTS: true,
+    LOG_REJECTS: false
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2752,15 +2759,16 @@ function buildAccumulatorPortfolio() {
     // ═══════════════════════════════════════════════════════════════════════════
     Logger.log('');
     Logger.log('═══════════════════════════════════════════════════════════════════════════');
-    Logger.log('STEP 4b: APPLYING GOLD FLOOR (edge>=GOLD, purity>=GOLD)');
+    Logger.log('STEP 4b: APPLYING FLOOR (edge>=' + ACCA_ENGINE_CONFIG.MIN_EDGE_GRADE + ', purity>=' + ACCA_ENGINE_CONFIG.MIN_PURITY_GRADE + ')');
     Logger.log('═══════════════════════════════════════════════════════════════════════════');
 
     var goldBets = _filterBets(enrichedBets0, {
       applyAssayerBlocks: true,
       skipStandard: true,
       applyGoldGate: false,
-      minEdgeGrade: 'GOLD',
-      minPurityGrade: 'GOLD'
+      minEdgeGrade: ACCA_ENGINE_CONFIG.MIN_EDGE_GRADE || 'GOLD',
+      minPurityGrade: ACCA_ENGINE_CONFIG.MIN_PURITY_GRADE || 'GOLD',
+      unknownEdgeAction: ACCA_ENGINE_CONFIG.UNKNOWN_EDGE_ACTION || 'ALLOW'
     });
 
     Logger.log('[' + FUNC_NAME + '] ✅ GOLD filter: ' + goldBets.length + '/' +
@@ -6744,6 +6752,9 @@ function _extractUsedBetIdsFromAccaPortfolio(ss, targetSheets) {
     }
   };
 
+  var rows = 0;
+  var fromCol = 0;
+
   for (var sn = 0; sn < targetSheets.length; sn++) {
     var sheet = ss.getSheetByName(targetSheets[sn]);
     if (!sheet) { Logger.log('[' + FUNC + '] ' + targetSheets[sn] + ' not found'); continue; }
@@ -6958,6 +6969,9 @@ function processLeftoverBets(ss, allBets, usedBetIds, leagueMetrics, assayerData
     UNKNOWN_LEAGUE_ACTION: (typeof ACCA_ENGINE_CONFIG !== 'undefined' &&
                             ACCA_ENGINE_CONFIG.UNKNOWN_LEAGUE_ACTION)
                             ? ACCA_ENGINE_CONFIG.UNKNOWN_LEAGUE_ACTION : 'BLOCK',
+    UNKNOWN_EDGE_ACTION:   (typeof ACCA_ENGINE_CONFIG !== 'undefined' &&
+                            ACCA_ENGINE_CONFIG.UNKNOWN_EDGE_ACTION)
+                            ? ACCA_ENGINE_CONFIG.UNKNOWN_EDGE_ACTION : 'ALLOW',
     REQUIRE_RELIABLE_EDGE: false
   }, FUNC);
 
