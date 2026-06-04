@@ -294,18 +294,16 @@ function _stampCanonicalHeaders_(sh, schemaHeaders) {
 
 
 function _marketFromRow_(b) {
-  // In PERFORMANCE_LOG, your "Type" column stores the market (MAIN/OU/Q_SPREAD/etc)
-  return String(b.Type || b.type || '').toUpperCase().trim();
+  return String(b.Type || b.type || b.Market || b.market || '').toUpperCase().trim();
 }
 
 function _sideFromRow_(b) {
-  // In PERFORMANCE_LOG, you have HomeAwayFlag (HOME/AWAY/NEUTRAL)
-  return String(b.HomeAwayFlag || b.homeAwayFlag || '').toUpperCase().trim();
+  return String(b.HomeAwayFlag || b.homeAwayFlag || b.Side || b.side || '').toUpperCase().trim();
 }
 
 function _isTotalsMarket_(market) {
   const m = String(market || '').toUpperCase().trim();
-  return (m === 'OU' || m === 'TOTALS');
+  return (m === 'OU' || m === 'TOTALS' || /OVER|UNDER|TOTAL/i.test(m));
 }
 
 
@@ -428,44 +426,7 @@ function _normalizeForebetActions_(bets) {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Helper stubs — replace with your actual implementations
-// ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Extract the market string from a bet row.
- * e.g. '1X2', 'Over/Under 2.5', 'Asian Handicap', etc.
- *
- * @param  {Object} b
- * @return {string}
- */
-function _marketFromRow_(b) {
-  // ── YOUR IMPLEMENTATION ──
-  return String(b.Market || b.market || '').trim();
-}
-
-/**
- * Is this market a totals (Over/Under) market?
- *
- * @param  {string} market
- * @return {boolean}
- */
-function _isTotalsMarket_(market) {
-  // ── YOUR IMPLEMENTATION ──
-  return /over|under|total/i.test(String(market));
-}
-
-/**
- * Extract the side / pick direction from a bet row.
- * Expected values: 'HOME', 'AWAY', 'DRAW', 'OVER', 'UNDER', etc.
- *
- * @param  {Object} b
- * @return {string}
- */
-function _sideFromRow_(b) {
-  // ── YOUR IMPLEMENTATION ──
-  return String(b.Side || b.side || '').trim();
-}
 
 function _matchString_(obj) {
   return matchString(obj);

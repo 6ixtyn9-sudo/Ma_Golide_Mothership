@@ -99,17 +99,42 @@ var LEFTOVER_CONFIG = {
 };
 
 function _getBetId_(b) {
-  if (b && typeof b.betId === 'string' && b.betId.trim() !== '') return b.betId;
-  if (b && typeof b.id === 'string' && b.id.trim() !== '') return b.id;
-  if (b && typeof b.bet_id === 'string' && b.bet_id.trim() !== '') return b.bet_id;
-  
-  const base = [
-    String(b.league || '').trim().toUpperCase(),
-    String(b.match || b.home + ' vs ' + b.away || '').trim().toUpperCase(),
-    String(b.pick || '').trim().toUpperCase(),
-    String(b.type || '').trim().toUpperCase(),
-    (b.time instanceof Date) ? b.time.toISOString() : String(b.time || '')
-  ].join('|');
+  if (!b) return '';
+
+  // Respect existing IDs (Intelligence Core / sheet schema uses BetID/BetId)
+  const existing = (typeof b.betId === 'string' && b.betId.trim() !== '') ? b.betId
+    : (typeof b.BetID === 'string' && b.BetID.trim() !== '') ? b.BetID
+    : (typeof b.BetId === 'string' && b.BetId.trim() !== '') ? b.BetId
+    : (typeof b.id === 'string' && b.id.trim() !== '') ? b.id
+    : (typeof b.bet_id === 'string' && b.bet_id.trim() !== '') ? b.bet_id : '';
+  if (existing) {
+    b.betId = existing;
+    return existing;
+  }
+
+  // Canonical identity parts (safe fallback — never "undefined vs undefined")
+  const league = String(b.league || '').trim().toUpperCase() || 'UNKNOWN_LEAGUE';
+
+  let matchPart = '';
+  const rawMatch = String(b.match || b.Match || '').trim();
+  if (rawMatch) {
+    matchPart = rawMatch.toUpperCase();
+  } else {
+    const home = String(b.home || b.HomeTeam || '').trim();
+    const away = String(b.away || b.AwayTeam || '').trim();
+    if (home && away) {
+      matchPart = home.toUpperCase() + ' VS ' + away.toUpperCase();
+    } else {
+      matchPart = 'UNKNOWN_MATCH';
+    }
+  }
+
+  const pick    = String(b.pick || b.Pick || b.selection || '').trim().toUpperCase() || 'UNKNOWN_PICK';
+  const type    = String(b.type || b.Type || b.betType || '').trim().toUpperCase() || 'UNKNOWN_TYPE';
+  const timeRaw = (b.time instanceof Date) ? b.time.toISOString()
+               : String(b.time || b.Time || b.matchDate || b.MatchDate || '');
+
+  const base = [league, matchPart, pick, type, timeRaw].join('|');
 
   try {
     const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, base, Utilities.Charset.UTF_8);
@@ -122,11 +147,11 @@ function _getBetId_(b) {
       hex += hexStr;
     }
     const generatedId = 'MD5_' + hex;
-    if (b) b.betId = generatedId;
+    b.betId = generatedId;
     return generatedId;
   } catch (e) {
     const fallbackId = ('BET_' + base).replace(/[^a-z0-9_]/gi, '_');
-    if (b) b.betId = fallbackId;
+    b.betId = fallbackId;
     return fallbackId;
   }
 }
@@ -165,7 +190,7 @@ function _normBet_(b) {
     if (home && away) match = home + ' vs ' + away;
   }
   b._leagueKey = league;
-  b._matchKey = league + '|' + match;
+  b._matchKey = league + '|' + (match ? match : ('__' + b.betId));
   
   // Precompute probabilities
   let p = ACCA_ENGINE_CONFIG.OPT_P_MIN;
@@ -212,24 +237,24 @@ function _normBet_(b) {
     if (!isNaN(t)) b._kickoffEpoch = t;
   }
 
-  // Anchor check
+  // Anchor check — inline grade ranking (replaces nested rankOf)
   b._isAnchor = false;
   if (b.assayer_passed === true || !ACCA_ENGINE_CONFIG.GOLD_ONLY_MODE) {
-    const edge = b.assayer && b.assayer.edge ? b.assayer.edge : {};
-    const pur = b.assayer && b.assayer.purity ? b.assayer.purity : {};
-    
-    // Evaluate strength
-    const isReliableOrLarge = (edge.reliable === true) || (edge.n >= ACCA_ENGINE_CONFIG.ANCHOR_MIN_N) || 
-                              (edge.sample_size === 'L' || edge.sample_size === 'Large' || edge.sample_size === 'XL');
-    
-    const rankOf = function(g) {
-      const n = String(g || '').trim().toUpperCase();
-      const r = { PLATINUM: 5, ELITE: 4, GOLD: 3, SILVER: 2, BRONZE: 1 };
-      return r[n] || 0;
-    };
-    
-    const meetsEdgeGrade = rankOf(edge.grade) >= rankOf(ACCA_ENGINE_CONFIG.ANCHOR_MIN_EDGE_GRADE);
-    const meetsPurityGrade = !pur.grade || rankOf(pur.grade) >= rankOf(ACCA_ENGINE_CONFIG.ANCHOR_MIN_PURITY_GRADE);
+    const ed = (b.assayer && b.assayer.edge) ? b.assayer.edge : {};
+    const pur = (b.assayer && b.assayer.purity) ? b.assayer.purity : {};
+
+    const isReliableOrLarge = (ed.reliable === true) || (ed.n >= ACCA_ENGINE_CONFIG.ANCHOR_MIN_N)
+      || (ed.sample_size === 'L' || ed.sample_size === 'Large' || ed.sample_size === 'XL');
+
+    // Inline grade ranking — no nested function
+    const GRADE_RANK = { PLATINUM: 5, ELITE: 4, GOLD: 3, SILVER: 2, BRONZE: 1, NONE: 0 };
+    const edgeRank = GRADE_RANK[String(ed.grade || '').trim().toUpperCase()] || 0;
+    const minEdgeRank = GRADE_RANK[String(ACCA_ENGINE_CONFIG.ANCHOR_MIN_EDGE_GRADE || '').trim().toUpperCase()] || 0;
+    const purRank = GRADE_RANK[String(pur.grade || '').trim().toUpperCase()] || 0;
+    const minPurRank = GRADE_RANK[String(ACCA_ENGINE_CONFIG.ANCHOR_MIN_PURITY_GRADE || '').trim().toUpperCase()] || 0;
+
+    const meetsEdgeGrade = edgeRank >= minEdgeRank;
+    const meetsPurityGrade = (!pur.grade) || (purRank >= minPurRank);
 
     if (isReliableOrLarge && meetsEdgeGrade && meetsPurityGrade) {
       b._isAnchor = true;
@@ -512,16 +537,22 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
     // Accept or break
     if (bestAcca && bestScore >= 0) {
       const idx = String(builtAccas.length + 1).padStart(2, '0');
-      const name = `${typePrefix || 'ACCA'} ${idx} (${targetSize}-fold)`;
-      
+
+      // Deterministic acca naming with mode tag (<40 chars)
+      const metrics = _accaMetrics_(bestAcca);
+      const modeTag = (mode === 'EV_MAX') ? 'EV' : (mode === 'ANCHOR_BOOSTER') ? 'ANC'
+                    : (mode === 'DIVERSIFY') ? 'DIV' : (mode === 'TIME_HEDGE') ? 'TIME' : 'FILL';
+      const aTag = metrics.anchorCount ? (' A' + metrics.anchorCount) : '';
+      const name = `${typePrefix || 'ACCA'} ${idx} ${targetSize}F ${modeTag}${aTag}`.trim();
+
       let accaObj = null;
       if (typeof _createAccaObjectEnhanced === 'function') {
         accaObj = _createAccaObjectEnhanced(bestAcca, name);
       } else {
         accaObj = { name: name, size: targetSize, legs: bestAcca };
       }
-      
-      accaObj._metrics = _accaMetrics_(bestAcca);
+
+      accaObj._metrics = metrics; // reuse already-computed metrics (no extra work)
       accaObj._score = bestScore;
       builtAccas.push(accaObj);
       
