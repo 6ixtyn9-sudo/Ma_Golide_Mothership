@@ -112,7 +112,7 @@ function _getBetId_(b) {
     return existing;
   }
 
-  // Canonical identity parts (safe fallback — never "undefined vs undefined")
+  // Canonical identity parts (safe fallback)
   const league = String(b.league || '').trim().toUpperCase() || 'UNKNOWN_LEAGUE';
 
   let matchPart = '';
@@ -352,8 +352,8 @@ function _scoreAcca_(legs, mode, cfg) {
   let score = 0;
 
   if (mode === 'FILL') {
-    // Legacy fallback: prefer anchors, then sum of probabilities
-    score = (metrics.anchorCount * 1000) + legs.reduce((s, l) => s + l._p, 0);
+    // Probability-first (log scale) so anchors don't swamp the base EV/prob
+    score = legs.reduce((s, l) => s + Math.log(l._p), 0) + (metrics.ev * 0.1);
   } else if (mode === 'EV_MAX') {
     score = metrics.ev;
   } else if (mode === 'ANCHOR_BOOSTER') {
@@ -390,15 +390,18 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
   
   if (available.length < targetSize) return [];
 
+  const mode = cfg.ALLOCATOR_MODE || 'FILL';
+
   // 2. Pre-filter top K candidates (reduce search space)
   const maxCands = cfg.OPT_MAX_CANDIDATES_PER_POOL || 50;
   if (available.length > maxCands) {
-    // Sort by p as cheap proxy
-    available.sort((a, b) => b._p - a._p);
+    if (mode === 'EV_MAX') {
+      available.sort((a, b) => b._ev - a._ev);
+    } else {
+      available.sort((a, b) => b._p - a._p);
+    }
     available = available.slice(0, maxCands);
   }
-  
-  const mode = cfg.ALLOCATOR_MODE || 'FILL';
   const builtAccas = [];
   
   let loopCount = 0;
@@ -416,34 +419,15 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
     
     // Sort available to ensure determinism
     available.sort((a, b) => {
-      if (a._p !== b._p) return b._p - a._p;
+      if (mode === 'EV_MAX') {
+        if (a._ev !== b._ev) return b._ev - a._ev;
+      } else {
+        if (a._p !== b._p) return b._p - a._p;
+      }
       return String(a.betId).localeCompare(String(b.betId));
     });
 
-    if (mode === 'FILL') {
-      // Greedy legacy parity
-      const current = [];
-      let evals = 0;
-      const maxEvals = Number(cfg.OPT_MAX_EVALS_PER_ACCA_SIZE || 5000);
-      for (let i = 0; i < available.length && current.length < targetSize; i++) {
-        evals++;
-        if (evals > maxEvals) {
-          Logger.log(`[${FUNC_NAME}] CAP HIT size=${targetSize} evals=${evals}`);
-          break;
-        }
-        if (evals % 100 === 0 && Date.now() - startMs > maxTimeMs) {
-          Logger.log(`[${FUNC_NAME}] TIME BUDGET HIT size=${targetSize}`);
-          break;
-        }
-        if (_canAddLegToAcca_(current, available[i], cfg, targetSize)) {
-          current.push(available[i]);
-        }
-      }
-      if (current.length === targetSize) {
-        bestAcca = current;
-        bestScore = _scoreAcca_(current, mode, cfg);
-      }
-    } else if (targetSize <= 3) {
+    if (targetSize <= 3) {
       // Brute force 3-folds
       let evals = 0;
       const maxEvals = Number(cfg.OPT_MAX_EVALS_PER_ACCA_SIZE || 5000);
