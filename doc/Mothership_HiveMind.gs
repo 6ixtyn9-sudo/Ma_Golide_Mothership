@@ -2498,6 +2498,8 @@ function fetchLeagueAccuracyMetrics() {
     ? ACCA_ENGINE_CONFIG.DEFAULT_ACCURACY : 50.0;
 
   var leagueMetrics = {};
+  var _codeToFusedCount = {};
+  var _codeToFusedSet = {};
 
   var configSheet = ss.getSheetByName('Config');
   if (!configSheet) {
@@ -2708,6 +2710,11 @@ function fetchLeagueAccuracyMetrics() {
 
       // Raw fused: "United StatesNBA"
       var fusedRaw = leagueName + leagueCode;
+
+      if (!_codeToFusedSet[leagueCode]) _codeToFusedSet[leagueCode] = new Set();
+      _codeToFusedSet[leagueCode].add(fusedRaw);
+      _codeToFusedCount[leagueCode] = _codeToFusedSet[leagueCode].size;
+
       storeKey(fusedRaw, metricData);
       storeKey(fusedRaw.toLowerCase(), metricData);
 
@@ -2733,6 +2740,22 @@ function fetchLeagueAccuracyMetrics() {
         '", "' + leagueCode +
         '", norm="' + nameNorm + '|' + codeNorm +
         '", fused="' + fusedRaw + '"'
+      );
+    }
+  }
+
+  // v4.4.0: Remove bare-code entries for collision codes.
+  // If "LNB" maps to both "FranceLNB" and "Dominican RepublicLNB",
+  // the bare "LNB" key is ambiguous. Remove it so AssayerBridge
+  // must resolve via fused key or return NO_PURITY (safe).
+  for (const [code, count] of Object.entries(_codeToFusedCount)) {
+    if (count > 1) {
+      delete leagueMetrics[code];
+      delete leagueMetrics[code.toLowerCase()];
+      delete leagueMetrics[code.toUpperCase()];
+      Logger.log(
+        '[' + FUNC_NAME + '] COLLISION — removed bare key "' + code +
+        '" (' + count + ' fused keys). AssayerBridge must resolve via fused key.'
       );
     }
   }
