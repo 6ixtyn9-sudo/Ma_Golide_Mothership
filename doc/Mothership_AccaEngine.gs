@@ -79,10 +79,136 @@ const ACCA_ENGINE_CONFIG = {
 
   LOGGING: {
     ENABLED: true,
-    LOG_ACCEPTS: true,
-    LOG_REJECTS: false
   }
 };
+
+// ────────────────────────────────────────────────────────────────────────
+// CANONICAL DATE/TIME PARSING — v2 (single source of truth)
+// All callers MUST go through _kickoffMs(bet) below. No new Date(...) on
+// raw sheet values anywhere else in the expiry pipeline.
+// ────────────────────────────────────────────────────────────────────────
+const EXPIRY_V2_ENABLED = true;
+const EXPIRY_TZ = 'Africa/Johannesburg';
+
+// Per-league grace minutes added to tip-off before a bet is "expired".
+// Default 150 min covers a full basketball game + buffer. Soccer would be 120.
+const EXPIRY_GRACE_MIN_DEFAULT = 150;
+const EXPIRY_GRACE_MIN_BY_LEAGUE = {
+  // Add overrides only if needed. Keys = league code as in Sync_Temp `league` col.
+  // 'WNB': 150, 'NBA': 150, ...
+};
+
+function _v2NormalizeDateOnly(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) {
+    const s = Utilities.formatDate(raw, EXPIRY_TZ, 'yyyy-MM-dd');
+    const parts = s.split('-');
+    return { y: parseInt(parts[0], 10), m: parseInt(parts[1], 10), d: parseInt(parts[2], 10) };
+  }
+  if (typeof raw === 'number') {
+    const sheetsEpoch = new Date(1899, 11, 30);
+    const d = new Date(sheetsEpoch.getTime() + Math.round(raw) * 86400000);
+    const s = Utilities.formatDate(d, EXPIRY_TZ, 'yyyy-MM-dd');
+    const parts = s.split('-');
+    return { y: parseInt(parts[0], 10), m: parseInt(parts[1], 10), d: parseInt(parts[2], 10) };
+  }
+  const str = String(raw).trim();
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoMatch) {
+    const d = new Date(str);
+    const s = Utilities.formatDate(d, EXPIRY_TZ, 'yyyy-MM-dd');
+    const parts = s.split('-');
+    return { y: parseInt(parts[0], 10), m: parseInt(parts[1], 10), d: parseInt(parts[2], 10) };
+  }
+  const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) return { y: parseInt(ymdMatch[1], 10), m: parseInt(ymdMatch[2], 10), d: parseInt(ymdMatch[3], 10) };
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) return { y: parseInt(dmyMatch[3], 10), m: parseInt(dmyMatch[2], 10), d: parseInt(dmyMatch[1], 10) };
+  return null;
+}
+
+function _v2NormalizeTimeOnly(raw) {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) {
+    const s = Utilities.formatDate(raw, EXPIRY_TZ, 'HH:mm');
+    const parts = s.split(':');
+    return { hh: parseInt(parts[0], 10), mm: parseInt(parts[1], 10) };
+  }
+  if (typeof raw === 'number' && raw >= 0 && raw < 1) {
+    const totalMins = Math.round(raw * 24 * 60);
+    return { hh: Math.floor(totalMins / 60), mm: totalMins % 60 };
+  }
+  const str = String(raw).trim();
+  const isoMatch = str.match(/T\d{2}:\d{2}:\d{2}/);
+  if (isoMatch) {
+    const d = new Date(str);
+    const s = Utilities.formatDate(d, EXPIRY_TZ, 'HH:mm');
+    const parts = s.split(':');
+    return { hh: parseInt(parts[0], 10), mm: parseInt(parts[1], 10) };
+  }
+  const hmMatch = str.match(/^(\d{1,2}):(\d{2})/);
+  if (hmMatch) return { hh: parseInt(hmMatch[1], 10), mm: parseInt(hmMatch[2], 10) };
+  return null;
+}
+
+function _kickoffMs(bet) {
+  if (!bet) return NaN;
+  const dObj = _v2NormalizeDateOnly(bet.date);
+  if (!dObj) return NaN;
+  const tObj = _v2NormalizeTimeOnly(bet.time);
+  if (!tObj) return NaN;
+  const pad = function(n) { return (n < 10 ? '0' + n : n); };
+  const localStr = dObj.y + '-' + pad(dObj.m) + '-' + pad(dObj.d) + ' ' + pad(tObj.hh) + ':' + pad(tObj.mm);
+  const d = Utilities.parseDate(localStr, EXPIRY_TZ, 'yyyy-MM-dd HH:mm');
+  return d ? d.getTime() : NaN;
+}
+
+/**
+ * Shared expiry test used by AccaEngine, HiveMind, RiskyAccaBuilder.
+ * Returns true ONLY if kickoff + per-league grace is in the past.
+ * Fail-open: returns false on parse failure.
+ */
+function isBetExpiredV2(bet, nowDate) {
+  if (!EXPIRY_V2_ENABLED) return false;
+  var now = (nowDate instanceof Date) ? nowDate : new Date();
+  var koMs = _kickoffMs(bet);
+  if (isNaN(koMs)) return false;
+  var league = String((bet && bet.league) || '').toUpperCase();
+  var graceMin = EXPIRY_GRACE_MIN_BY_LEAGUE[league] || EXPIRY_GRACE_MIN_DEFAULT;
+  return now.getTime() > koMs + (graceMin * 60 * 1000);
+}
+
+function diagnoseExpiryV2() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const syncSheet = ss.getSheetByName('Sync_Temp');
+  if (!syncSheet) return;
+  const bets = _loadBetsFromSyncTemp(syncSheet);
+  const now = new Date();
+  let flippedToActive = 0;
+  let flippedToExpired = 0;
+  
+  Logger.log('league, match, dateRaw, timeRaw, parsedLocal, koMs, graceMin, minutesPastTipoff, isExpiredLegacy, isExpiredV2');
+  bets.forEach(function(b) {
+    const t0 = _parseTime(b.time, b.date);
+    const legacyExpired = t0 && t0 < now;
+    
+    const koMs = _kickoffMs(b);
+    const v2Expired = isBetExpiredV2(b, now);
+    
+    const league = String((b && b.league) || '').toUpperCase();
+    const graceMin = EXPIRY_GRACE_MIN_BY_LEAGUE[league] || EXPIRY_GRACE_MIN_DEFAULT;
+    
+    const parsedLocal = !isNaN(koMs) ? Utilities.formatDate(new Date(koMs), EXPIRY_TZ, 'yyyy-MM-dd HH:mm') : 'NaN';
+    const minutesPastTipoff = !isNaN(koMs) ? Math.floor((now.getTime() - koMs) / 60000) : 'NaN';
+    
+    if (legacyExpired && !v2Expired) flippedToActive++;
+    if (!legacyExpired && v2Expired) flippedToExpired++;
+    
+    Logger.log(b.league + ', ' + b.match + ', ' + b.date + ', ' + b.time + ', ' + parsedLocal + ', ' + koMs + ', ' + graceMin + ', ' + minutesPastTipoff + ', ' + legacyExpired + ', ' + v2Expired);
+  });
+  
+  Logger.log('SUMMARY: flipped expired->active: ' + flippedToActive + ', active->expired: ' + flippedToExpired);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LEFTOVER BETS SYSTEM - FIXED WITH PICK-INCLUSIVE BET IDs
@@ -7147,6 +7273,37 @@ function _loadBetsFromSyncTemp(ss) {
       pastCount + ' past, ' + parseFailCount + ' parse-failed'
     );
 
+    if (typeof isBetExpiredV2 === 'function' && typeof _kickoffMs === 'function') {
+      var nNow = new Date();
+      var legacyExp = 0;
+      var v2Exp = 0;
+      var firstExpired = [];
+      for (var ix=0; ix<bets.length; ix++) {
+        var bb = bets[ix];
+        // For legacy logging estimate, we just check bb.timeMs < nowMs 
+        // because timeMs uses _parseTime under the hood
+        var isLegExp = bb.timeMs < nowMs;
+        var isV2Exp = isBetExpiredV2(bb, nNow);
+        if (isLegExp) legacyExp++;
+        if (isV2Exp) {
+          v2Exp++;
+          if (firstExpired.length < 5) {
+            var koMs = _kickoffMs(bb);
+            var loc = !isNaN(koMs) ? Utilities.formatDate(new Date(koMs), EXPIRY_TZ, 'yyyy-MM-dd HH:mm') : 'NaN';
+            var minsPast = !isNaN(koMs) ? Math.floor((nowMs - koMs)/60000) : 'NaN';
+            firstExpired.push(bb.match + ' (' + bb.league + ') - ' + loc + ' (' + minsPast + 'm past)');
+          }
+        }
+      }
+      Logger.log('[' + FUNC_NAME + '] Expiry V2 Check: ' + legacyExp + ' would expire legacy (grace=0), ' + v2Exp + ' expire with grace');
+      if (firstExpired.length > 0) {
+        Logger.log('[' + FUNC_NAME + '] First 5 expired bets:');
+        for (var fj=0; fj<firstExpired.length; fj++) {
+          Logger.log('  - ' + firstExpired[fj]);
+        }
+      }
+    }
+
     var s = bets[0];
     Logger.log(
       '[' + FUNC_NAME + '] Sample bet: "' + s.match + '" | type="' + s.type + '" | ' +
@@ -7471,8 +7628,16 @@ function processLeftoverBets(ss, allBets, usedBetIds, leagueMetrics, assayerData
   };
 
   var _isExpired = function(b) {
-    var t = _pt(b && b.time);
-    return (t && t < now);
+    if (!EXPIRY_V2_ENABLED) {
+      var t0 = _pt(b && b.time);
+      return (t0 && t0 < now);
+    }
+    var koMs = _kickoffMs(b);
+    if (isNaN(koMs)) return false; // fail-open: do NOT silently expire parse failures
+    var league = String((b && b.league) || '').toUpperCase();
+    var graceMin = EXPIRY_GRACE_MIN_BY_LEAGUE[league] || EXPIRY_GRACE_MIN_DEFAULT;
+    var expiresAt = koMs + (graceMin * 60 * 1000);
+    return now.getTime() > expiresAt;
   };
 
   // ══════════════════════════════════════════════════

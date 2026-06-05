@@ -442,7 +442,7 @@ function _loadPendingRiskyBets(ss) {
           var gameTimeRaw = (timeCol != null) ? gameRow[timeCol] : null;
           if (typeof _parseGameDateTime === 'function') {
             var gameTime = _parseGameDateTime(dateRaw, gameTimeRaw);
-            if (gameTime && gameTime < now) continue;
+            if (gameTime && (typeof isBetExpiredV2 === 'function' ? isBetExpiredV2(bet, now) : (gameTime < now))) continue;
           }
 
           // Forebet prediction

@@ -3430,7 +3430,7 @@ function _filterBets(bets, opts) {
     if (!skipStandard) {
       var betTime = (bet.time instanceof Date) ? bet.time : new Date(bet.time);
       if (!betTime || !isFinite(betTime.getTime())) { excluded.past++; continue; }
-      if (betTime < now)           { excluded.past++;   continue; }
+      if (typeof isBetExpiredV2 === 'function' ? isBetExpiredV2(bet, now) : (betTime < now)) { excluded.past++; continue; }
       if (betTime > cutoffFuture)  { excluded.future++; continue; }
 
       var conf = Number(bet.confidence);
