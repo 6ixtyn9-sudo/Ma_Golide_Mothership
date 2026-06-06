@@ -2868,32 +2868,39 @@ function fetchLeagueAccuracyMetrics() {
           for (var _rr = 1; _rr < _cData.length; _rr++) {
             var _homeTeam = '';
             var _awayTeam = '';
-            
+
+            // Step 1: try dedicated home/away columns
             if (_homeIdx !== -1 && _awayIdx !== -1) {
               _homeTeam = String(_cData[_rr][_homeIdx] || '').trim().toLowerCase();
               _awayTeam = String(_cData[_rr][_awayIdx] || '').trim().toLowerCase();
-            } else if (_matchIdx !== -1) {
+            }
+
+            // Step 2: if still empty, try match column
+            if ((!_homeTeam || !_awayTeam) && _matchIdx !== -1) {
               var _matchStr = String(_cData[_rr][_matchIdx] || '').toLowerCase();
               if (_matchStr.indexOf(' vs ') >= 0) {
-                var _parts = _matchStr.split(' vs ');
-                _homeTeam = _parts[0].trim();
-                _awayTeam = _parts[1].trim();
+                var _mParts = _matchStr.split(' vs ');
+                _homeTeam = _mParts[0].trim();
+                _awayTeam = _mParts[1] ? _mParts[1].trim() : '';
               }
-            } else {
-              // Last resort: blindly look for " vs " in ANY column of this row
-              for (var _c = 0; _c < _cData[_rr].length; _c++) {
-                var _cellStr = String(_cData[_rr][_c] || '').toLowerCase();
-                if (_cellStr.indexOf(' vs ') >= 0) {
-                  var _parts = _cellStr.split(' vs ');
-                  _homeTeam = _parts[0].trim();
-                  _awayTeam = _parts[1].trim();
+            }
+
+            // Step 3: if still empty, scan every cell in the row for " vs "
+            if (!_homeTeam || !_awayTeam) {
+              for (var _sc = 0; _sc < _cData[_rr].length; _sc++) {
+                var _scStr = String(_cData[_rr][_sc] || '').toLowerCase();
+                if (_scStr.indexOf(' vs ') >= 0) {
+                  var _scParts = _scStr.split(' vs ');
+                  _homeTeam = _scParts[0].trim();
+                  _awayTeam = _scParts[1] ? _scParts[1].trim() : '';
                   break;
                 }
               }
             }
-            
-            if (_homeTeam && _homeTeam !== 'na' && _homeTeam !== '-') leagueMetrics._teamToLeague[_homeTeam] = _cName;
-            if (_awayTeam && _awayTeam !== 'na' && _awayTeam !== '-') leagueMetrics._teamToLeague[_awayTeam] = _cName;
+
+            var _badVal = ['', 'na', '-', 'n/a', 'home', 'away', 'match', 'game'];
+            if (_homeTeam && _badVal.indexOf(_homeTeam) === -1) leagueMetrics._teamToLeague[_homeTeam] = _cName;
+            if (_awayTeam && _badVal.indexOf(_awayTeam) === -1) leagueMetrics._teamToLeague[_awayTeam] = _cName;
           }
           Logger.log('[' + FUNC_NAME + '] Mapped ' + (_cData.length - 1) + ' rows of teams from ' + _cName);
         } catch (e) {
@@ -3123,6 +3130,17 @@ function _loadBets(sheet) {
       const isPickDirFormat = /Q[1-4]\s*(OVER|UNDER)\s*[\d.]+/i.test(pickUpper);
       const finalIsSniperDir = isSniperDir || (isSniper && isPickDirFormat);
       
+      // Derive home / away from dedicated columns, falling back to "match" string
+      const homeRaw = headerMap['home'] !== undefined
+        ? String(row[headerMap['home']] || '').trim()
+        : '';
+      const awayRaw = headerMap['away'] !== undefined
+        ? String(row[headerMap['away']] || '').trim()
+        : '';
+      const matchParts = match.split(' vs ');
+      const homeVal = homeRaw || (matchParts.length >= 2 ? matchParts[0].trim() : '');
+      const awayVal = awayRaw || (matchParts.length >= 2 ? matchParts[1].trim() : '');
+
       bets.push({
         league,
         date: dateStr,
@@ -3140,7 +3158,9 @@ function _loadBets(sheet) {
         isSniperDir: finalIsSniperDir,  // NEW: Directional O/U pick
         isSniperOU,                      // NEW: O/U pick (non-directional)
         isSniperMargin,                  // NEW: Margin/spread pick
-        sourcesheet: String(row[30] || '').trim()
+        home: homeVal,
+        away: awayVal,
+        sourcesheet: String(row[headerMap['sourcesheet'] !== undefined ? headerMap['sourcesheet'] : 30] || '').trim()
       });
       
     } catch (e) {
