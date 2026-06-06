@@ -842,8 +842,13 @@ function _enrichBetsWithAccuracy(bets, leagueMetrics, assayerData) {
         Logger.log("[_enrichBetsWithAccuracy] Team match for %s -> %s (resolved via team: %s)",
                    bet.league, resolvedByTeam, matchedTeam);
       } else {
-        Logger.log("[_enrichBetsWithAccuracy] Team disambiguation FAILED for %s. Tried home='%s', away='%s'. Available teams in map: %s",
-                   bet.league, homeKey, awayKey, Object.keys(metrics._teamToLeague).length);
+        // Only log a failure if this league was expected to need team disambiguation
+        // (i.e. it is a collision code). Non-collision leagues fall through to keysToTry silently.
+        var _colKey = String(bet.league || '').trim();
+        if (metrics._collisionResolution && (metrics._collisionResolution[_colKey] || metrics._collisionResolution[_colKey.toUpperCase()])) {
+          Logger.log("[_enrichBetsWithAccuracy] Team disambiguation FAILED for %s. Tried home='%s', away='%s'. Available teams in map: %s",
+                     bet.league, homeKey, awayKey, Object.keys(metrics._teamToLeague).length);
+        }
       }
     }
     // --- End team disambiguation ---
@@ -865,6 +870,11 @@ function _enrichBetsWithAccuracy(bets, leagueMetrics, assayerData) {
         if (key && metrics[key]) {
           leagueMeta = metrics[key];
           matchedCount++;
+          // Stamp resolved league name for purity compound disambiguation
+          // (e.g. "Puerto Rico" lets BSN resolve to BSN_PUE vs BSN_MAY)
+          if (!bet._resolvedLeagueName && leagueMeta.leagueName) {
+            bet._resolvedLeagueName = leagueMeta.leagueName;
+          }
           break;
         }
       }
