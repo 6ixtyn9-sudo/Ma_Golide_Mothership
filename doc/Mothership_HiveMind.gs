@@ -2855,11 +2855,19 @@ function fetchLeagueAccuracyMetrics() {
             if (_hdr === 'match' || _hdr === 'game' || _hdr === 'fixture' || _hdr === 'event') _matchIdx = _h;
           }
 
+          // DIAGNOSTIC: Log sheet name, headers, and first 3 raw rows so we can see the format
+          Logger.log('[' + FUNC_NAME + '] [DIAG] Sheet: "' + _cSheet.getName() + '" | homeIdx=' + _homeIdx + ' awayIdx=' + _awayIdx + ' matchIdx=' + _matchIdx);
+          Logger.log('[' + FUNC_NAME + '] [DIAG] Headers: ' + JSON.stringify(_cData[0].slice(0, 10)));
+          for (var _dr = 1; _dr <= Math.min(3, _cData.length - 1); _dr++) {
+            Logger.log('[' + FUNC_NAME + '] [DIAG] Row ' + _dr + ': ' + JSON.stringify(_cData[_dr].slice(0, 10)));
+          }
+
           // Sniff first data row if headers didn't reveal the match column
           if (_homeIdx === -1 && _matchIdx === -1 && _cData.length > 1) {
             for (var _c = 0; _c < _cData[1].length; _c++) {
               if (String(_cData[1][_c] || '').indexOf(' vs ') >= 0) {
                 _matchIdx = _c;
+                Logger.log('[' + FUNC_NAME + '] [DIAG] Sniffed matchIdx=' + _matchIdx + ' from row 1');
                 break;
               }
             }
