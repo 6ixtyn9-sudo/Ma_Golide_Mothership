@@ -828,23 +828,28 @@ function _enrichBetsWithAccuracy(bets, leagueMetrics, assayerData) {
       }
     }
 
-    // ── LNB COUNTRY RESOLVER ──
-    if (!leagueMeta && String(league).toUpperCase() === 'LNB' && metrics._lnbTeams) {
-      var matchUpper = String(bet.match || '').toUpperCase();
-      var isFrance = metrics._lnbTeams.france.some(function(t){ return matchUpper.indexOf(t) !== -1; });
-      var isDominican = metrics._lnbTeams.dominican.some(function(t){ return matchUpper.indexOf(t) !== -1; });
-      
-      if (isFrance && metrics['France']) {
-        leagueMeta = metrics['France'];
+  // ── SourceSheet disambiguation (exact league name match) ──
+  if (!leagueMeta && bet.sourcesheet) {
+    var sourceKeys = [bet.sourcesheet, bet.sourcesheet.toLowerCase(), bet.sourcesheet.toUpperCase()];
+    for (var ski = 0; ski < sourceKeys.length; ski++) {
+      if (sourceKeys[ski] && metrics[sourceKeys[ski]]) {
+        leagueMeta = metrics[sourceKeys[ski]];
         matchedCount++;
-        Logger.log('[' + FUNC_NAME + '] LNB resolved to FRANCE via team match: ' + bet.match);
-      } else if (isDominican && metrics['Dominican Republic']) {
-        leagueMeta = metrics['Dominican Republic'];
-        matchedCount++;
-        Logger.log('[' + FUNC_NAME + '] LNB resolved to DOMINICAN via team match: ' + bet.match);
+        Logger.log('[' + FUNC_NAME + '] SourceSheet match for ' + league + ' -> ' + sourceKeys[ski]);
+        break;
       }
     }
-    // ── END LNB RESOLVER ──
+  }
+
+  // ── Collision-resolution fallback (averaged, self-documenting) ──
+  if (!leagueMeta && metrics._collisionResolution) {
+    var colKey = String(league || '').trim();
+    if (metrics._collisionResolution[colKey]) {
+      leagueMeta = metrics._collisionResolution[colKey];
+      matchedCount++;
+      Logger.log('[' + FUNC_NAME + '] Collision resolution used for ' + league + ': ' + leagueMeta.tier1Source);
+    }
+  }
 
     // Dynamic unique-prefix fallback (no static collision list).
     // Example: bet.league="LNB" can match metrics["LNB_FRA"] if it is the only LNB_* key.
@@ -2913,16 +2918,24 @@ function _writePortfolioWithAccuracy(sheet, accas, leagueMetrics) {
             }
           }
           
-          // ── LNB COUNTRY RESOLVER ──
-          if (!foundMeta && String(leg.league || '').toUpperCase() === 'LNB' && metrics._lnbTeams) {
-            var mUp = String(leg.match || '').toUpperCase();
-            if (metrics._lnbTeams.france.some(function(t){ return mUp.indexOf(t) !== -1; }) && metrics['France']) {
-              foundMeta = metrics['France'];
-            } else if (metrics._lnbTeams.dominican.some(function(t){ return mUp.indexOf(t) !== -1; }) && metrics['Dominican Republic']) {
-              foundMeta = metrics['Dominican Republic'];
+          // ── SourceSheet disambiguation ──
+          if (!foundMeta && leg.sourcesheet) {
+            var sourceKeys2 = [leg.sourcesheet, leg.sourcesheet.toLowerCase(), leg.sourcesheet.toUpperCase()];
+            for (var ski2 = 0; ski2 < sourceKeys2.length; ski2++) {
+              if (sourceKeys2[ski2] && metrics[sourceKeys2[ski2]]) {
+                foundMeta = metrics[sourceKeys2[ski2]];
+                break;
+              }
             }
           }
-          // ── END LNB RESOLVER ──
+
+          // ── Collision-resolution fallback ──
+          if (!foundMeta && metrics._collisionResolution) {
+            var colKey3 = String(leg.league || '').trim();
+            if (metrics._collisionResolution[colKey3]) {
+              foundMeta = metrics._collisionResolution[colKey3];
+            }
+          }
           
           if (foundMeta) {
             if (isBanker && foundMeta.hasTier1) {
@@ -7419,7 +7432,8 @@ function _loadBetsFromSyncTemp(ss) {
 
       isBanker:      type.toUpperCase().indexOf('BANKER') >= 0,
       isSniper:      type.toUpperCase().indexOf('SNIPER') >= 0,
-      isDirectional: type.toUpperCase().indexOf('DIR') >= 0
+      isDirectional: type.toUpperCase().indexOf('DIR') >= 0,
+      sourcesheet:   String(getCell(row, 30) || '').trim()
     });
   }
 

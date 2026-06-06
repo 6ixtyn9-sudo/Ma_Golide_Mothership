@@ -2995,7 +2995,8 @@ function _loadBets(sheet) {
         isSniper,
         isSniperDir: finalIsSniperDir,  // NEW: Directional O/U pick
         isSniperOU,                      // NEW: O/U pick (non-directional)
-        isSniperMargin                   // NEW: Margin/spread pick
+        isSniperMargin,                  // NEW: Margin/spread pick
+        sourcesheet: String(row[30] || '').trim()
       });
       
     } catch (e) {
