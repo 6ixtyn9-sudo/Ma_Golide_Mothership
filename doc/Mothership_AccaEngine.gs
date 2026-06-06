@@ -828,16 +828,23 @@ function _enrichBetsWithAccuracy(bets, leagueMetrics, assayerData) {
       }
     }
 
-    // ── Collision-resolution fallback (averages colliding leagues) ──
-    if (!leagueMeta && metrics._collisionResolution) {
-      var colKey = String(league || '').trim();
-      if (metrics._collisionResolution[colKey]) {
-        leagueMeta = metrics._collisionResolution[colKey];
+    // ── LNB COUNTRY RESOLVER ──
+    if (!leagueMeta && String(league).toUpperCase() === 'LNB' && metrics._lnbTeams) {
+      var matchUpper = String(bet.match || '').toUpperCase();
+      var isFrance = metrics._lnbTeams.france.some(function(t){ return matchUpper.indexOf(t) !== -1; });
+      var isDominican = metrics._lnbTeams.dominican.some(function(t){ return matchUpper.indexOf(t) !== -1; });
+      
+      if (isFrance && metrics['France']) {
+        leagueMeta = metrics['France'];
         matchedCount++;
-        Logger.log('[' + FUNC_NAME + '] Collision resolution used for ' + league + ': ' + leagueMeta.tier1Source);
+        Logger.log('[' + FUNC_NAME + '] LNB resolved to FRANCE via team match: ' + bet.match);
+      } else if (isDominican && metrics['Dominican Republic']) {
+        leagueMeta = metrics['Dominican Republic'];
+        matchedCount++;
+        Logger.log('[' + FUNC_NAME + '] LNB resolved to DOMINICAN via team match: ' + bet.match);
       }
     }
-    // ── END collision-resolution fallback ──
+    // ── END LNB RESOLVER ──
 
     // Dynamic unique-prefix fallback (no static collision list).
     // Example: bet.league="LNB" can match metrics["LNB_FRA"] if it is the only LNB_* key.
@@ -2906,14 +2913,16 @@ function _writePortfolioWithAccuracy(sheet, accas, leagueMetrics) {
             }
           }
           
-          // ── Collision-resolution fallback ──
-          if (!foundMeta && metrics._collisionResolution) {
-            const colKey2 = String(leg.league || '').trim();
-            if (metrics._collisionResolution[colKey2]) {
-              foundMeta = metrics._collisionResolution[colKey2];
+          // ── LNB COUNTRY RESOLVER ──
+          if (!foundMeta && String(leg.league || '').toUpperCase() === 'LNB' && metrics._lnbTeams) {
+            var mUp = String(leg.match || '').toUpperCase();
+            if (metrics._lnbTeams.france.some(function(t){ return mUp.indexOf(t) !== -1; }) && metrics['France']) {
+              foundMeta = metrics['France'];
+            } else if (metrics._lnbTeams.dominican.some(function(t){ return mUp.indexOf(t) !== -1; }) && metrics['Dominican Republic']) {
+              foundMeta = metrics['Dominican Republic'];
             }
           }
-          // ── END collision-resolution fallback ──
+          // ── END LNB RESOLVER ──
           
           if (foundMeta) {
             if (isBanker && foundMeta.hasTier1) {
