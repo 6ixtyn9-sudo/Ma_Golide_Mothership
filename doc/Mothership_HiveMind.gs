@@ -2845,43 +2845,48 @@ function fetchLeagueAccuracyMetrics() {
           var _cData = _cSheet.getDataRange().getValues();
           if (_cData.length < 2) continue;
 
-          // Scan header row for home / away / match columns
-          var _hdrs   = _cData[0];
+          // ── Multi-section Bet_Slips format handler ──
+          // The satellite sheet has: title row → blank → section divider → column headers → data rows
+          // Column headers repeat for each section. We scan the first 20 rows to find Home/Away indexes.
           var _homeIdx = -1, _awayIdx = -1, _matchIdx = -1;
-          for (var _h = 0; _h < _hdrs.length; _h++) {
-            var _hdr = String(_hdrs[_h] || '').toLowerCase().trim();
-            if (_hdr === 'home') _homeIdx = _h;
-            if (_hdr === 'away') _awayIdx = _h;
-            if (_hdr === 'match' || _hdr === 'game' || _hdr === 'fixture' || _hdr === 'event') _matchIdx = _h;
-          }
 
-          // DIAGNOSTIC: Log sheet name, headers, and first 3 raw rows so we can see the format
-          Logger.log('[' + FUNC_NAME + '] [DIAG] Sheet: "' + _cSheet.getName() + '" | homeIdx=' + _homeIdx + ' awayIdx=' + _awayIdx + ' matchIdx=' + _matchIdx);
-          Logger.log('[' + FUNC_NAME + '] [DIAG] Headers: ' + JSON.stringify(_cData[0].slice(0, 10)));
-          for (var _dr = 1; _dr <= Math.min(3, _cData.length - 1); _dr++) {
-            Logger.log('[' + FUNC_NAME + '] [DIAG] Row ' + _dr + ': ' + JSON.stringify(_cData[_dr].slice(0, 10)));
-          }
-
-          // Sniff first data row if headers didn't reveal the match column
-          if (_homeIdx === -1 && _matchIdx === -1 && _cData.length > 1) {
-            for (var _c = 0; _c < _cData[1].length; _c++) {
-              if (String(_cData[1][_c] || '').indexOf(' vs ') >= 0) {
-                _matchIdx = _c;
-                Logger.log('[' + FUNC_NAME + '] [DIAG] Sniffed matchIdx=' + _matchIdx + ' from row 1');
-                break;
-              }
+          for (var _hri = 0; _hri < Math.min(20, _cData.length); _hri++) {
+            var _tryRow = _cData[_hri];
+            var _tryHome = -1, _tryAway = -1, _tryMatch = -1;
+            for (var _th = 0; _th < _tryRow.length; _th++) {
+              var _thdr = String(_tryRow[_th] || '').toLowerCase().trim();
+              if (_thdr === 'home') _tryHome = _th;
+              if (_thdr === 'away') _tryAway = _th;
+              if (_thdr === 'match' || _thdr === 'game' || _thdr === 'fixture' || _thdr === 'event') _tryMatch = _th;
+            }
+            if (_tryHome !== -1 || _tryAway !== -1 || _tryMatch !== -1) {
+              _homeIdx = _tryHome;
+              _awayIdx = _tryAway;
+              _matchIdx = _tryMatch;
+              Logger.log('[' + FUNC_NAME + '] Found column headers at row ' + _hri + ': homeIdx=' + _homeIdx + ' awayIdx=' + _awayIdx + ' matchIdx=' + _matchIdx);
+              break;
             }
           }
 
+          // Build a bad-value guard list (includes the literal header cell values to skip repeated headers)
+          var _badVal = ['', 'na', '-', 'n/a', 'home', 'away', 'match', 'game', 'fixture', 'event', 'league', 'date'];
+          var _teamsWritten = 0;
+
           for (var _rr = 1; _rr < _cData.length; _rr++) {
+            var _row0 = String(_cData[_rr][0] || '');
+
+            // Skip: section dividers (e.g. "──── BANKERS ────"), title rows, repeated header rows
+            if (_row0.indexOf('────') >= 0) continue;
+            if (_row0.indexOf('Ma Golide') >= 0) continue;
+            if (_row0.toLowerCase().indexOf('bet_record_id') >= 0) continue;
+            if (_row0.toLowerCase() === 'bankers:' || _row0.toLowerCase().indexOf('total picks') >= 0) continue;
+
             var _homeTeam = '';
             var _awayTeam = '';
 
-            // Step 1: try dedicated home/away columns
-            if (_homeIdx !== -1 && _awayIdx !== -1) {
-              _homeTeam = String(_cData[_rr][_homeIdx] || '').trim().toLowerCase();
-              _awayTeam = String(_cData[_rr][_awayIdx] || '').trim().toLowerCase();
-            }
+            // Step 1: try dedicated home/away columns (found anywhere in the sheet's header scan)
+            if (_homeIdx !== -1) _homeTeam = String(_cData[_rr][_homeIdx] || '').trim().toLowerCase();
+            if (_awayIdx !== -1) _awayTeam = String(_cData[_rr][_awayIdx] || '').trim().toLowerCase();
 
             // Step 2: if still empty, try match column
             if ((!_homeTeam || !_awayTeam) && _matchIdx !== -1) {
@@ -2906,11 +2911,17 @@ function fetchLeagueAccuracyMetrics() {
               }
             }
 
-            var _badVal = ['', 'na', '-', 'n/a', 'home', 'away', 'match', 'game'];
-            if (_homeTeam && _badVal.indexOf(_homeTeam) === -1) leagueMetrics._teamToLeague[_homeTeam] = _cName;
-            if (_awayTeam && _badVal.indexOf(_awayTeam) === -1) leagueMetrics._teamToLeague[_awayTeam] = _cName;
+            // Write to team map, skip bad/header values
+            if (_homeTeam && _badVal.indexOf(_homeTeam) === -1) {
+              leagueMetrics._teamToLeague[_homeTeam] = _cName;
+              _teamsWritten++;
+            }
+            if (_awayTeam && _badVal.indexOf(_awayTeam) === -1) {
+              leagueMetrics._teamToLeague[_awayTeam] = _cName;
+              _teamsWritten++;
+            }
           }
-          Logger.log('[' + FUNC_NAME + '] Mapped ' + (_cData.length - 1) + ' rows of teams from ' + _cName);
+          Logger.log('[' + FUNC_NAME + '] Mapped ' + _teamsWritten + ' team entries from ' + _cName + ' (scanned ' + (_cData.length - 1) + ' rows)');
         } catch (e) {
           Logger.log('[' + FUNC_NAME + '] Failed to read teams for ' + _cName + ': ' + e.message);
         }
