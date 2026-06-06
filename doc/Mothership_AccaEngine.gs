@@ -828,16 +828,20 @@ function _enrichBetsWithAccuracy(bets, leagueMetrics, assayerData) {
     if (!leagueMeta && bet.league && metrics._teamToLeague) {
       var homeKey = String(bet.home || '').trim().toLowerCase();
       var awayKey = String(bet.away || '').trim().toLowerCase();
-      
+
       var resolvedByTeam = metrics._teamToLeague[homeKey] || metrics._teamToLeague[awayKey];
       var matchedTeam = metrics._teamToLeague[homeKey] ? homeKey : (metrics._teamToLeague[awayKey] ? awayKey : '');
-      
+
       if (resolvedByTeam && metrics[resolvedByTeam]) {
         leagueMeta = metrics[resolvedByTeam];
         matchedCount++;
+        // Stamp the resolved league name so AssayerBridge purity lookup can use the
+        // correct compound code (e.g. "France" -> LNB_FRA) instead of the bare "LNB".
+        bet._resolvedLeagueName = resolvedByTeam;        // e.g. "France"
+        bet._resolvedLeagueCode = leagueMeta.leagueCode || bet.league; // e.g. "LNB"
         Logger.log("[_enrichBetsWithAccuracy] Team match for %s -> %s (resolved via team: %s)",
                    bet.league, resolvedByTeam, matchedTeam);
-      } else if (bet.league === 'LNB' || bet.league === 'lnb') {
+      } else {
         Logger.log("[_enrichBetsWithAccuracy] Team disambiguation FAILED for %s. Tried home='%s', away='%s'. Available teams in map: %s",
                    bet.league, homeKey, awayKey, Object.keys(metrics._teamToLeague).length);
       }

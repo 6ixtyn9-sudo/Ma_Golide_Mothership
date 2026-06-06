@@ -1589,7 +1589,7 @@ function assayerLeagueBareCode_(league) {
   return s.indexOf('_') >= 0 ? s.split('_')[0] : s;
 }
 
-function assayerCollectCompatiblePurityRows_(league, purityRows) {
+function assayerCollectCompatiblePurityRows_(league, purityRows, resolvedLeagueName) {
   var want = assayerCanonUpper_(league);
   if (!want || !purityRows || purityRows.length === 0) return [];
 
@@ -1630,9 +1630,39 @@ function assayerCollectCompatiblePurityRows_(league, purityRows) {
   }
 
   var compounds = Object.keys(byCompound);
+
   if (compounds.length !== 1) {
+    if (compounds.length > 1 && resolvedLeagueName) {
+      // ── Team-disambiguation hint available: try to match compound by resolved name ──
+      // Strategy: the compound key is CODE_SLUG (e.g. LNB_FRA, LNB_DOM, BSN_PUE, BSN_MAY).
+      // Normalise the resolved name to uppercase letters only and check if any compound
+      // contains those letters as a prefix-of-suffix match.
+      // Examples: "France" -> "FRANCE" -> matches LNB_FRA (first 3 chars)
+      //           "Dominican Republic" -> "DOMINICANREPUBLIC" -> matches LNB_DOM
+      //           "Puerto Rico" -> "PUERTORICO" -> matches BSN_PUE
+      var hintUpper = assayerCanonUpper_(resolvedLeagueName).replace(/[^A-Z]/g, '');
+      var hintChosen = null;
+      for (var hc = 0; hc < compounds.length; hc++) {
+        var slug = compounds[hc].slice(bare.length + 1); // e.g. "FRA", "DOM", "PUE"
+        if (hintUpper.indexOf(slug) === 0 || slug.indexOf(hintUpper.slice(0, slug.length)) === 0) {
+          hintChosen = compounds[hc];
+          break;
+        }
+      }
+      if (hintChosen) {
+        var hintOut = [];
+        for (var ho = 0; ho < purityRows.length; ho++) {
+          var hro = purityRows[ho];
+          if (!hro || !hro.league) continue;
+          if (assayerCanonUpper_(hro.league) === hintChosen) hintOut.push(hro);
+        }
+        return hintOut;
+      }
+    }
+    // Could not resolve — log warning only when no hint was provided or hint didn't match
     if (compounds.length > 1) {
-      Logger.log('[AssayerBridge] Ambiguous league prefix for purity lookup: ' + bare + ' -> ' + compounds.join(', '));
+      Logger.log('[AssayerBridge] Ambiguous league prefix for purity lookup: ' + bare + ' -> ' + compounds.join(', ') +
+        (resolvedLeagueName ? ' (hint="' + resolvedLeagueName + '" did not match any compound)' : ''));
     }
     return [];
   }
@@ -1663,7 +1693,8 @@ function assayerLookupLeaguePurity_(dims, purityRows) {
   // Exact match first; otherwise use safe dynamic bare/CODE_SLUG transition fallback.
   // Bare CODE only maps to CODE_* when exactly one compound exists.
   // Compound CODE_X never maps to a different compound CODE_Y sharing the same bare code.
-  var leagueRows = assayerCollectCompatiblePurityRows_(league, purityRows);
+  // Pass resolved league name hint so ambiguous codes (LNB, BSN) can pick the right compound.
+  var leagueRows = assayerCollectCompatiblePurityRows_(league, purityRows, dims._resolvedLeagueName || null);
   if (leagueRows.length === 0) return null;
 
   // 2) Parameterized filter
@@ -2093,25 +2124,28 @@ function assayerDeriveBetDims_(bet) {
   // ◄◄ PATCH END ─────────────────────────────────────────────────────────────
 
   return {
-    league:        league,
-    source:        source,
-    quarter:       quarterEdge,
-    quarterPurity: quarterPurity,
-    isWomen:       isWomen,
-    gender:        gender,
-    tier:          tierEdge,
-    tierPurity:    tierPurity,
-    side:          side,
-    direction:     direction,
-    confidence:    confidence,
-    conf_bucket:   assayerCanonBucket_(conf_bucket),
-    spread:        spread,
-    spread_bucket: assayerCanonBucket_(spread_bucket),
-    line:          line,
-    line_bucket:   assayerCanonBucket_(line_bucket),
-    typeKey:       typeKey,                                 // ◄◄ PATCH
-    cfgKey:        cfgKey,
-    cfgBucket:     cfgBucket
+    league:               league,
+    source:               source,
+    quarter:              quarterEdge,
+    quarterPurity:        quarterPurity,
+    isWomen:              isWomen,
+    gender:               gender,
+    tier:                 tierEdge,
+    tierPurity:           tierPurity,
+    side:                 side,
+    direction:            direction,
+    confidence:           confidence,
+    conf_bucket:          assayerCanonBucket_(conf_bucket),
+    spread:               spread,
+    spread_bucket:        assayerCanonBucket_(spread_bucket),
+    line:                 line,
+    line_bucket:          assayerCanonBucket_(line_bucket),
+    typeKey:              typeKey,                                 // ◄◄ PATCH
+    cfgKey:               cfgKey,
+    cfgBucket:            cfgBucket,
+    // Propagate team-disambiguation hint so purity lookup can pick the right compound
+    // (e.g. "France" -> LNB_FRA, "Dominican Republic" -> LNB_DOM, "Puerto Rico" -> BSN_PUE)
+    _resolvedLeagueName:  (bet && bet._resolvedLeagueName) ? String(bet._resolvedLeagueName) : null
   };
 }
 
