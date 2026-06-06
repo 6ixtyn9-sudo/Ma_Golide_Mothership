@@ -59,7 +59,7 @@ const ACCA_ENGINE_CONFIG = {
   MIN_EDGE_GRADE: 'SILVER',
   MIN_PURITY_GRADE: 'SILVER',
   UNKNOWN_LEAGUE_ACTION: 'ALLOW',
-  UNKNOWN_EDGE_ACTION: 'ALLOW',
+  UNKNOWN_EDGE_ACTION: 'BLOCK',
   REQUIRE_RELIABLE_EDGE: false,
 
   // ── Optimizer Config ──
@@ -95,46 +95,26 @@ var LEFTOVER_CONFIG = {
   MIN_POOL_SIZE:      2,              
   DEFAULT_ODDS:       1.50,          
   FORCE_DOUBLES:      true,          
-  ALLOW_SINGLES:      true           
+  ALLOW_SINGLES:      true,
+
+  // ── Risky tier gate (must match RISKY_ACCA_CONFIG) ──
+  RISKY_MIN_EDGE_GRADE:   'SILVER',
+  RISKY_REQUIRE_RELIABLE: true,
+  RISKY_MIN_EDGE_N:       30
 };
 
 function _getBetId_(b) {
-  if (!b) return '';
-
-  // Respect existing IDs (Intelligence Core / sheet schema uses BetID/BetId)
-  const existing = (typeof b.betId === 'string' && b.betId.trim() !== '') ? b.betId
-    : (typeof b.BetID === 'string' && b.BetID.trim() !== '') ? b.BetID
-    : (typeof b.BetId === 'string' && b.BetId.trim() !== '') ? b.BetId
-    : (typeof b.id === 'string' && b.id.trim() !== '') ? b.id
-    : (typeof b.bet_id === 'string' && b.bet_id.trim() !== '') ? b.bet_id : '';
-  if (existing) {
-    b.betId = existing;
-    return existing;
-  }
-
-  // Canonical identity parts (safe fallback)
-  const league = String(b.league || '').trim().toUpperCase() || 'UNKNOWN_LEAGUE';
-
-  let matchPart = '';
-  const rawMatch = String(b.match || b.Match || '').trim();
-  if (rawMatch) {
-    matchPart = rawMatch.toUpperCase();
-  } else {
-    const home = String(b.home || b.HomeTeam || '').trim();
-    const away = String(b.away || b.AwayTeam || '').trim();
-    if (home && away) {
-      matchPart = home.toUpperCase() + ' VS ' + away.toUpperCase();
-    } else {
-      matchPart = 'UNKNOWN_MATCH';
-    }
-  }
-
-  const pick    = String(b.pick || b.Pick || b.selection || '').trim().toUpperCase() || 'UNKNOWN_PICK';
-  const type    = String(b.type || b.Type || b.betType || '').trim().toUpperCase() || 'UNKNOWN_TYPE';
-  const timeRaw = (b.time instanceof Date) ? b.time.toISOString()
-               : String(b.time || b.Time || b.matchDate || b.MatchDate || '');
-
-  const base = [league, matchPart, pick, type, timeRaw].join('|');
+  if (b && typeof b.betId === 'string' && b.betId.trim() !== '') return b.betId;
+  if (b && typeof b.id === 'string' && b.id.trim() !== '') return b.id;
+  if (b && typeof b.bet_id === 'string' && b.bet_id.trim() !== '') return b.bet_id;
+  
+  const base = [
+    String(b.league || '').trim().toUpperCase(),
+    String(b.match || b.home + ' vs ' + b.away || '').trim().toUpperCase(),
+    String(b.pick || '').trim().toUpperCase(),
+    String(b.type || '').trim().toUpperCase(),
+    (b.time instanceof Date) ? b.time.toISOString() : String(b.time || '')
+  ].join('|');
 
   try {
     const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, base, Utilities.Charset.UTF_8);
@@ -147,11 +127,11 @@ function _getBetId_(b) {
       hex += hexStr;
     }
     const generatedId = 'MD5_' + hex;
-    b.betId = generatedId;
+    if (b) b.betId = generatedId;
     return generatedId;
   } catch (e) {
     const fallbackId = ('BET_' + base).replace(/[^a-z0-9_]/gi, '_');
-    b.betId = fallbackId;
+    if (b) b.betId = fallbackId;
     return fallbackId;
   }
 }
@@ -190,7 +170,7 @@ function _normBet_(b) {
     if (home && away) match = home + ' vs ' + away;
   }
   b._leagueKey = league;
-  b._matchKey = league + '|' + (match ? match : ('__' + b.betId));
+  b._matchKey = league + '|' + match;
   
   // Precompute probabilities
   let p = ACCA_ENGINE_CONFIG.OPT_P_MIN;
@@ -237,24 +217,24 @@ function _normBet_(b) {
     if (!isNaN(t)) b._kickoffEpoch = t;
   }
 
-  // Anchor check — inline grade ranking (replaces nested rankOf)
+  // Anchor check
   b._isAnchor = false;
   if (b.assayer_passed === true || !ACCA_ENGINE_CONFIG.GOLD_ONLY_MODE) {
-    const ed = (b.assayer && b.assayer.edge) ? b.assayer.edge : {};
-    const pur = (b.assayer && b.assayer.purity) ? b.assayer.purity : {};
-
-    const isReliableOrLarge = (ed.reliable === true) || (ed.n >= ACCA_ENGINE_CONFIG.ANCHOR_MIN_N)
-      || (ed.sample_size === 'L' || ed.sample_size === 'Large' || ed.sample_size === 'XL');
-
-    // Inline grade ranking — no nested function
-    const GRADE_RANK = { PLATINUM: 5, ELITE: 4, GOLD: 3, SILVER: 2, BRONZE: 1, NONE: 0 };
-    const edgeRank = GRADE_RANK[String(ed.grade || '').trim().toUpperCase()] || 0;
-    const minEdgeRank = GRADE_RANK[String(ACCA_ENGINE_CONFIG.ANCHOR_MIN_EDGE_GRADE || '').trim().toUpperCase()] || 0;
-    const purRank = GRADE_RANK[String(pur.grade || '').trim().toUpperCase()] || 0;
-    const minPurRank = GRADE_RANK[String(ACCA_ENGINE_CONFIG.ANCHOR_MIN_PURITY_GRADE || '').trim().toUpperCase()] || 0;
-
-    const meetsEdgeGrade = edgeRank >= minEdgeRank;
-    const meetsPurityGrade = (!pur.grade) || (purRank >= minPurRank);
+    const edge = b.assayer && b.assayer.edge ? b.assayer.edge : {};
+    const pur = b.assayer && b.assayer.purity ? b.assayer.purity : {};
+    
+    // Evaluate strength
+    const isReliableOrLarge = (edge.reliable === true) || (edge.n >= ACCA_ENGINE_CONFIG.ANCHOR_MIN_N) || 
+                              (edge.sample_size === 'L' || edge.sample_size === 'Large' || edge.sample_size === 'XL');
+    
+    const rankOf = function(g) {
+      const n = String(g || '').trim().toUpperCase();
+      const r = { PLATINUM: 5, ELITE: 4, GOLD: 3, SILVER: 2, BRONZE: 1 };
+      return r[n] || 0;
+    };
+    
+    const meetsEdgeGrade = rankOf(edge.grade) >= rankOf(ACCA_ENGINE_CONFIG.ANCHOR_MIN_EDGE_GRADE);
+    const meetsPurityGrade = !pur.grade || rankOf(pur.grade) >= rankOf(ACCA_ENGINE_CONFIG.ANCHOR_MIN_PURITY_GRADE);
 
     if (isReliableOrLarge && meetsEdgeGrade && meetsPurityGrade) {
       b._isAnchor = true;
@@ -352,8 +332,8 @@ function _scoreAcca_(legs, mode, cfg) {
   let score = 0;
 
   if (mode === 'FILL') {
-    // Probability-first (log scale) so anchors don't swamp the base EV/prob
-    score = legs.reduce((s, l) => s + Math.log(l._p), 0) + (metrics.ev * 0.1);
+    // Legacy fallback: prefer anchors, then sum of probabilities
+    score = (metrics.anchorCount * 1000) + legs.reduce((s, l) => s + l._p, 0);
   } else if (mode === 'EV_MAX') {
     score = metrics.ev;
   } else if (mode === 'ANCHOR_BOOSTER') {
@@ -390,18 +370,15 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
   
   if (available.length < targetSize) return [];
 
-  const mode = cfg.ALLOCATOR_MODE || 'FILL';
-
   // 2. Pre-filter top K candidates (reduce search space)
   const maxCands = cfg.OPT_MAX_CANDIDATES_PER_POOL || 50;
   if (available.length > maxCands) {
-    if (mode === 'EV_MAX') {
-      available.sort((a, b) => b._ev - a._ev);
-    } else {
-      available.sort((a, b) => b._p - a._p);
-    }
+    // Sort by p as cheap proxy
+    available.sort((a, b) => b._p - a._p);
     available = available.slice(0, maxCands);
   }
+  
+  const mode = cfg.ALLOCATOR_MODE || 'FILL';
   const builtAccas = [];
   
   let loopCount = 0;
@@ -419,15 +396,34 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
     
     // Sort available to ensure determinism
     available.sort((a, b) => {
-      if (mode === 'EV_MAX') {
-        if (a._ev !== b._ev) return b._ev - a._ev;
-      } else {
-        if (a._p !== b._p) return b._p - a._p;
-      }
+      if (a._p !== b._p) return b._p - a._p;
       return String(a.betId).localeCompare(String(b.betId));
     });
 
-    if (targetSize <= 3) {
+    if (mode === 'FILL') {
+      // Greedy legacy parity
+      const current = [];
+      let evals = 0;
+      const maxEvals = Number(cfg.OPT_MAX_EVALS_PER_ACCA_SIZE || 5000);
+      for (let i = 0; i < available.length && current.length < targetSize; i++) {
+        evals++;
+        if (evals > maxEvals) {
+          Logger.log(`[${FUNC_NAME}] CAP HIT size=${targetSize} evals=${evals}`);
+          break;
+        }
+        if (evals % 100 === 0 && Date.now() - startMs > maxTimeMs) {
+          Logger.log(`[${FUNC_NAME}] TIME BUDGET HIT size=${targetSize}`);
+          break;
+        }
+        if (_canAddLegToAcca_(current, available[i], cfg, targetSize)) {
+          current.push(available[i]);
+        }
+      }
+      if (current.length === targetSize) {
+        bestAcca = current;
+        bestScore = _scoreAcca_(current, mode, cfg);
+      }
+    } else if (targetSize <= 3) {
       // Brute force 3-folds
       let evals = 0;
       const maxEvals = Number(cfg.OPT_MAX_EVALS_PER_ACCA_SIZE || 5000);
@@ -521,22 +517,16 @@ function _buildAccas_(pool, usedBetIds, targetSize, cfg, typePrefix) {
     // Accept or break
     if (bestAcca && bestScore >= 0) {
       const idx = String(builtAccas.length + 1).padStart(2, '0');
-
-      // Deterministic acca naming with mode tag (<40 chars)
-      const metrics = _accaMetrics_(bestAcca);
-      const modeTag = (mode === 'EV_MAX') ? 'EV' : (mode === 'ANCHOR_BOOSTER') ? 'ANC'
-                    : (mode === 'DIVERSIFY') ? 'DIV' : (mode === 'TIME_HEDGE') ? 'TIME' : 'FILL';
-      const aTag = metrics.anchorCount ? (' A' + metrics.anchorCount) : '';
-      const name = `${typePrefix || 'ACCA'} ${idx} ${targetSize}F ${modeTag}${aTag}`.trim();
-
+      const name = `${typePrefix || 'ACCA'} ${idx} (${targetSize}-fold)`;
+      
       let accaObj = null;
       if (typeof _createAccaObjectEnhanced === 'function') {
         accaObj = _createAccaObjectEnhanced(bestAcca, name);
       } else {
         accaObj = { name: name, size: targetSize, legs: bestAcca };
       }
-
-      accaObj._metrics = metrics; // reuse already-computed metrics (no extra work)
+      
+      accaObj._metrics = _accaMetrics_(bestAcca);
       accaObj._score = bestScore;
       builtAccas.push(accaObj);
       
@@ -3334,7 +3324,8 @@ function buildAccumulatorPortfolio() {
       applyGoldGate: false,
       minEdgeGrade: ACCA_ENGINE_CONFIG.MIN_EDGE_GRADE || 'GOLD',
       minPurityGrade: ACCA_ENGINE_CONFIG.MIN_PURITY_GRADE || 'GOLD',
-      unknownEdgeAction: ACCA_ENGINE_CONFIG.UNKNOWN_EDGE_ACTION || 'ALLOW'
+      unknownEdgeAction: ACCA_ENGINE_CONFIG.UNKNOWN_EDGE_ACTION || 'ALLOW',
+      unknownPurityAction: 'ALLOW'
     });
 
     Logger.log('[' + FUNC_NAME + '] ✅ GOLD filter: ' + goldBets.length + '/' +
@@ -3384,45 +3375,77 @@ function buildAccumulatorPortfolio() {
     Logger.log('[' + FUNC_NAME + '] ✅ Written to Acca_Portfolio sheet');
 
     // ---------------------------------------------------------
-    // 👑 THE BIG BANG EXTRACTOR (TOP 10% BY ODDS)
+    // 👑 BLOCKBUSTER BUILDER — purpose-built high-odds monster
+    //
+    // NOT a clone of a regular acca. Instead:
+    //   1. Takes ALL qualifying goldBets
+    //   2. Sorts by individual odds DESCENDING (highest odds first)
+    //   3. Picks top 12-15 legs with no same-game duplicates
+    //   4. Builds a single mega-accumulator
     // ---------------------------------------------------------
     try {
-      if (portfolios && portfolios.length) {
+      if (goldBets && goldBets.length >= 12) {
 
-        // 1) Sort by TOTAL ODDS descending (massive payouts first)
-        //    Tie-break: prefer more unique leagues (diversity bonus)
-        var rankedAccas = portfolios.slice().sort(function(a, b) {
-          var oddsA = _getTotalOdds(a);
-          var oddsB = _getTotalOdds(b);
-          if (oddsB !== oddsA) return oddsB - oddsA;
-          // tie-break: more leagues = more diverse = preferred
-          return _uniqueLeagueCount(b) - _uniqueLeagueCount(a);
+        // 1) Sort all qualifying bets by individual odds — highest first
+        var bbCandidates = goldBets.slice().sort(function(a, b) {
+          var oA = parseFloat(a.odds) || 1.0;
+          var oB = parseFloat(b.odds) || 1.0;
+          if (oB !== oA) return oB - oA;
+          // tie-break: prefer different leagues for diversity
+          return 0;
         });
 
-        // 2) Take the top 10% (always at least 1)
-        var top10Count = Math.max(1, Math.floor(rankedAccas.length * 0.10));
-        var bigBangAccas = rankedAccas.slice(0, top10Count);
+        // 2) Greedily pick top legs, skipping same-game duplicates
+        var BLOCKBUSTER_TARGET = Math.min(15, goldBets.length); // 15 legs max, 12 min
+        if (BLOCKBUSTER_TARGET < 12) BLOCKBUSTER_TARGET = goldBets.length;
 
-        // 3) Clone and add VIP flair
-        var blockbusterClones = [];
-        for (var bb = 0; bb < bigBangAccas.length; bb++) {
-          var clone = Object.assign({}, bigBangAccas[bb]);
-          // Preserve legs array reference (shallow clone is fine, we only change top-level fields)
-          var legsCount = (clone.legs && clone.legs.length) ? clone.legs.length : 0;
-          var cloneOdds = _getTotalOdds(clone);
+        var bbLegs = [];
+        var bbMatchKeys = {};
+        var bbLeagueCounts = {};
 
-          clone.type = 'BLOCKBUSTER';
-          clone.name = '👑 BIG BANG ' + legsCount + '-Fold (' +
-            cloneOdds.toFixed(2) + 'x | ' +
-            _uniqueLeagueCount(clone) + ' leagues)';
+        for (var bci = 0; bci < bbCandidates.length && bbLegs.length < BLOCKBUSTER_TARGET; bci++) {
+          var bcb = bbCandidates[bci];
+          var mk = _matchKey(bcb);
+          if (bbMatchKeys[mk]) continue; // skip same-game picks
 
-          // Stamp computed totalOdds so the writer always has it
-          clone.totalOdds = cloneOdds;
-
-          blockbusterClones.push(clone);
+          bbLegs.push(bcb);
+          bbMatchKeys[mk] = true;
+          var lgKey = String(bcb.league || '').trim().toUpperCase();
+          bbLeagueCounts[lgKey] = (bbLeagueCounts[lgKey] || 0) + 1;
         }
 
-        // 4) Write to dedicated VIP sheet (clear old data first)
+        // 3) Build the blockbuster acca object
+        var bbTotalOdds = 1.0;
+        var bbSumAcc = 0;
+        for (var bli = 0; bli < bbLegs.length; bli++) {
+          bbTotalOdds *= (parseFloat(bbLegs[bli].odds) || 1.0);
+          bbSumAcc += (bbLegs[bli].accuracyScore || ACCA_ENGINE_CONFIG.PENALTY_ACCURACY);
+        }
+        var bbAvgAcc = bbLegs.length > 0 ? bbSumAcc / bbLegs.length : 0;
+        var bbUniqueLeagues = Object.keys(bbLeagueCounts).length;
+
+        var blockbuster = _createAccaObjectEnhanced(bbLegs,
+          '👑 BLOCKBUSTER ' + bbLegs.length + '-Fold');
+        blockbuster.type = 'BLOCKBUSTER';
+        blockbuster.name = '👑 BLOCKBUSTER ' + bbLegs.length + '-Fold (' +
+          bbTotalOdds.toFixed(2) + 'x | ' +
+          bbUniqueLeagues + ' leagues | ' +
+          bbAvgAcc.toFixed(1) + '% avg)';
+
+        // Log individual leg odds for verification
+        Logger.log('[' + FUNC_NAME + '] 🔥 BLOCKBUSTER legs (sorted by odds desc):');
+        for (var bloi = 0; bloi < bbLegs.length; bloi++) {
+          Logger.log('[' + FUNC_NAME + ']   #' + (bloi + 1) + ' ' +
+            (bbLegs[bloi].league || '') + ' | ' +
+            String(bbLegs[bloi].pick || '').substring(0, 35) + ' | ' +
+            'odds=' + bbLegs[bloi].odds + ' | ' +
+            (bbLegs[bloi].type || '') + ' | ' +
+            'edge=' + (bbLegs[bloi].assayer_edge_grade || 'NONE'));
+        }
+
+        var blockbusterList = [blockbuster];
+
+        // 4) Write to dedicated sheet
         var bbSheet = _getSheet(ss, 'Blockbuster_Accas');
         if (!bbSheet) {
           bbSheet = ss.insertSheet('Blockbuster_Accas');
@@ -3430,18 +3453,38 @@ function buildAccumulatorPortfolio() {
           bbSheet.clearContents();
         }
 
-        _writePortfolioWithAccuracy(bbSheet, blockbusterClones, leagueMetrics);
+        _writePortfolioWithAccuracy(bbSheet, blockbusterList, leagueMetrics);
 
-        Logger.log('[' + FUNC_NAME + '] ✅ Extracted ' + top10Count +
-          ' Big Bang Accas to Blockbuster_Accas');
-        Logger.log('[' + FUNC_NAME + ']   Top entry: ' +
-          (blockbusterClones[0] ? blockbusterClones[0].name : 'none'));
+        Logger.log('[' + FUNC_NAME + '] ✅ BLOCKBUSTER built: ' +
+          bbLegs.length + '-Fold @ ' + bbTotalOdds.toFixed(2) + 'x | ' +
+          bbUniqueLeagues + ' unique leagues');
 
+      } else if (portfolios && portfolios.length) {
+        // Fallback: not enough qualifying bets for a proper blockbuster (need 12+)
+        // Use old logic — clone the highest-odds regular acca
+        var rankedAccas = portfolios.slice().sort(function(a, b) {
+          return _getTotalOdds(b) - _getTotalOdds(a);
+        });
+        var fallbackClone = Object.assign({}, rankedAccas[0]);
+        fallbackClone.type = 'BLOCKBUSTER';
+        fallbackClone.totalOdds = _getTotalOdds(fallbackClone);
+        var fLegs = (fallbackClone.legs && fallbackClone.legs.length) || 0;
+        fallbackClone.name = '👑 BIG BANG ' + fLegs + '-Fold (' +
+          fallbackClone.totalOdds.toFixed(2) + 'x)';
+
+        var bbSheet2 = _getSheet(ss, 'Blockbuster_Accas');
+        if (!bbSheet2) bbSheet2 = ss.insertSheet('Blockbuster_Accas');
+        else bbSheet2.clearContents();
+        _writePortfolioWithAccuracy(bbSheet2, [fallbackClone], leagueMetrics);
+
+        Logger.log('[' + FUNC_NAME + '] ⚠️ Not enough bets for 12+ leg blockbuster (' +
+          (goldBets ? goldBets.length : 0) + ' available). Used fallback: ' + fLegs + '-Fold @ ' +
+          fallbackClone.totalOdds.toFixed(2) + 'x');
       } else {
-        Logger.log('[' + FUNC_NAME + '] ℹ️ Big Bang extraction skipped: no portfolios built.');
+        Logger.log('[' + FUNC_NAME + '] ℹ️ Blockbuster skipped: no bets or portfolios.');
       }
     } catch (bbErr) {
-      Logger.log('[' + FUNC_NAME + '] ⚠️ Big Bang extraction skipped: ' + bbErr.message);
+      Logger.log('[' + FUNC_NAME + '] ⚠️ Blockbuster builder error: ' + bbErr.message);
     }
     // ---------------------------------------------------------
 
@@ -7540,7 +7583,9 @@ function processLeftoverBets(ss, allBets, usedBetIds, leagueMetrics, assayerData
     skipStandard: true,
     applyGoldGate: false,
     minEdgeGrade: 'SILVER',
-    minPurityGrade: 'SILVER'
+    minPurityGrade: 'SILVER',
+    unknownEdgeAction: 'BLOCK',
+    unknownPurityAction: 'ALLOW'
   });
   Logger.log('[' + FUNC + '] ✅ Silver qualified: ' +
     silQ.length + '/' + enriched.length);
