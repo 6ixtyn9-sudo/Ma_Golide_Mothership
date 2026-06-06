@@ -438,11 +438,13 @@ function _loadPendingRiskyBets(ss) {
 
           if (result && result.isFinished) continue;
 
-          // Check if game time is in the future
+          // Check if game time is in the future (V2: uses grace window)
           var gameTimeRaw = (timeCol != null) ? gameRow[timeCol] : null;
           if (typeof _parseGameDateTime === 'function') {
             var gameTime = _parseGameDateTime(dateRaw, gameTimeRaw);
-            if (gameTime && gameTime < now) continue;
+            if (gameTime && (typeof isBetExpiredV2 === 'function'
+                ? isBetExpiredV2({ date: dateRaw, time: gameTimeRaw, league: leagueName }, now)
+                : (gameTime < now))) continue;
           }
 
           // Forebet prediction

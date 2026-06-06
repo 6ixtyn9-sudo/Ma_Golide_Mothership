@@ -2498,6 +2498,8 @@ function fetchLeagueAccuracyMetrics() {
     ? ACCA_ENGINE_CONFIG.DEFAULT_ACCURACY : 50.0;
 
   var leagueMetrics = {};
+  var _codeToFusedCount = {};
+  var _codeToFusedSet = {};
 
   var configSheet = ss.getSheetByName('Config');
   if (!configSheet) {
@@ -2711,6 +2713,11 @@ function fetchLeagueAccuracyMetrics() {
       storeKey(fusedRaw, metricData);
       storeKey(fusedRaw.toLowerCase(), metricData);
 
+      // Track fused-key collisions (LNB fix)
+      if (!_codeToFusedSet[leagueCode]) _codeToFusedSet[leagueCode] = new Set();
+      _codeToFusedSet[leagueCode].add(fusedRaw);
+      _codeToFusedCount[leagueCode] = _codeToFusedSet[leagueCode].size;
+
       // Spaced fused: "United States NBA"
       var fusedSpaced = leagueName + ' ' + leagueCode;
       storeKey(fusedSpaced, metricData);
@@ -2738,6 +2745,16 @@ function fetchLeagueAccuracyMetrics() {
   }
 
   Logger.log('[' + FUNC_NAME + '] ═══════════════════════════════════════');
+  // Remove bare-code keys that collide across multiple leagues (e.g., LNB)
+  for (var _colCode in _codeToFusedCount) {
+    if (_codeToFusedCount[_colCode] > 1) {
+      delete leagueMetrics[_colCode];
+      delete leagueMetrics[_colCode.toLowerCase()];
+      delete leagueMetrics[_colCode.toUpperCase()];
+      Logger.log('[' + FUNC_NAME + '] COLLISION — removed bare key "' + _colCode + '" (shared by ' + _codeToFusedCount[_colCode] + ' leagues)');
+    }
+  }
+
   Logger.log('[' + FUNC_NAME + '] ✅ Total metric keys: ' + Object.keys(leagueMetrics).length);
 
   return leagueMetrics;
@@ -3411,7 +3428,7 @@ function _filterBets(bets, opts) {
     if (!skipStandard) {
       var betTime = (bet.time instanceof Date) ? bet.time : new Date(bet.time);
       if (!betTime || !isFinite(betTime.getTime())) { excluded.past++; continue; }
-      if (betTime < now)           { excluded.past++;   continue; }
+      if (typeof isBetExpiredV2 === 'function' ? isBetExpiredV2(bet, now) : (betTime < now)) { excluded.past++; continue; }
       if (betTime > cutoffFuture)  { excluded.future++; continue; }
 
       var conf = Number(bet.confidence);

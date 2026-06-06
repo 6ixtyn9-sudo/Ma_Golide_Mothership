@@ -1516,12 +1516,26 @@ function assayerEdgeSpecificity_(edge) {
  */
 function accaEngineSyncAssayerBridgeConfig_(cfg, label) {
   label = label || 'AccaEngine';
+
+  // ACCA_GATES_V2 override — applied at function boundary so ALL callers benefit.
+  // Object.assign clones — does NOT mutate the caller's original cfg object.
+  if (typeof ACCA_GATES_V2_ENABLED !== 'undefined' && ACCA_GATES_V2_ENABLED === true &&
+      typeof ACCA_GATES_V2 === 'object' && ACCA_GATES_V2) {
+    cfg = Object.assign({}, cfg || {}, {
+      UNKNOWN_EDGE_ACTION:   ACCA_GATES_V2.UNKNOWN_EDGE_ACTION,
+      MIN_EDGE_GRADE:        (cfg && cfg.MIN_EDGE_GRADE)        || 'SILVER',
+      MIN_PURITY_GRADE:      (cfg && cfg.MIN_PURITY_GRADE)      || 'SILVER',
+      REQUIRE_EDGE_RELIABLE: (cfg && cfg.REQUIRE_EDGE_RELIABLE) === true
+    });
+  }
+
   if (typeof assayerApplyBridgeConfig_ === 'function') {
     assayerApplyBridgeConfig_(cfg || {});
-    Logger.log('[' + label + '] ✅ Bridge config synced: GOLD_ONLY_MODE=' +
+    Logger.log('[AssayerBridge] Config applied: GOLD_ONLY_MODE=' +
       (cfg && cfg.GOLD_ONLY_MODE) + ' MIN_EDGE_GRADE=' +
       (cfg && cfg.MIN_EDGE_GRADE) + ' MIN_PURITY_GRADE=' +
-      (cfg && cfg.MIN_PURITY_GRADE));
+      (cfg && cfg.MIN_PURITY_GRADE) + ' UNKNOWN_EDGE_ACTION=' +
+      (cfg && cfg.UNKNOWN_EDGE_ACTION));
   } else {
     Logger.log('[' + label + '] ⚠️ assayerApplyBridgeConfig_ not found — ' +
       'Bridge will use its own defaults. Grade metadata may be inconsistent.');
